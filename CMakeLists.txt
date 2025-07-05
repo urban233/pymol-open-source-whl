@@ -78,7 +78,7 @@ if (${PLATFORM} STREQUAL "WINDOWS")
     set (OS_SPECIFIC_COMPILER_DEFS
             WIN32
             PYMOL_OPENMP
-            # _HAVE_LIBXML # I had linker problems using this macro
+            _HAVE_LIBXML # I had linker problems using this macro
     )
 endif ()
 

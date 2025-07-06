@@ -12,7 +12,7 @@
 #-*
 #-*
 #Z* -------------------------------------------------------------------
-name: Build Wheels
+name: Build Nightly Wheels
 
 on:
   push:
@@ -84,7 +84,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PyMOL-wheel-Windows-${{ matrix.win_arch }}-3.11
+          name: PyMOL-wheel-Windows-${{ matrix.win_arch }}-nightly
           path: ./wheelhouse/*.whl
   # --- end
 
@@ -140,7 +140,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PyMOL-wheel-${{ matrix.os }}-3.11
+          name: PyMOL-wheel-${{ matrix.os }}-nightly
           path: ./wheelhouse/*.whl
   # --- end
 
@@ -195,6 +195,6 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PyMOL-wheel-GNU-Linux-3.11
+          name: PyMOL-wheel-GNU-Linux-nightly
           path: ./wheelhouse/*.whl
   # --- end

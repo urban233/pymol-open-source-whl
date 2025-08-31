@@ -63,11 +63,44 @@ jobs:
           git commit -m "Merge upstream/${{ env.UPSTREAM_BRANCH }} into unstable, keeping fork deletions/overrides" || echo "No commit needed"
           git push origin ${{ env.UNSTABLE_BRANCH }}
 
-      - name: Run tests on unstable
+      - name: Install system dependencies
         run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pytest -q || exit 1
+          sudo apt-get update
+          sudo apt-get install git build-essential libxmu-dev libxi-dev libgl-dev libglew-dev libpng-dev libfreetype6-dev libxml2-dev libmsgpack-dev libglm-dev libnetcdf-dev linux-libc-dev autoconf perl
+
+      - name: Initialize vcpkg
+        run: |
+          git clone https://github.com/Microsoft/vcpkg.git vendor/vcpkg
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Create virtual environment
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          python -m pip install wheel setuptools cibuildwheel 
+          python -m pip install -r requirements.txt
+
+      - name: Bootstrap vcpkg
+        run: ${{ env.VCPKG_ROOT }}/bootstrap-vcpkg.sh -disableMetrics
+
+      - name: Install vcpkg dependencies
+        run: |
+          ${{ env.VCPKG_ROOT }}/vcpkg install
+
+      - name: Last build environment setup steps
+        run: |
+          source .venv/bin/activate
+          python automations/my_automator.py setup dev-env
+
+      - name: Build C extension
+        run: |
+          source .venv/bin/activate
+          python automations/my_automator.py setup dev-env
+          cibuildwheel .
 
       - name: Detect if unstable has diverged from production
         id: changes

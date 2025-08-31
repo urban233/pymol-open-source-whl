@@ -1,0 +1,90 @@
+name: Sync with Upstream (unstable → production)
+
+on:
+  schedule:
+    - cron: "0 4 * * 0"  # Every Sunday at 04:00 UTC
+  workflow_dispatch:       # Allow manual trigger from the Actions tab
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: true
+
+env:
+  UPSTREAM_REPO: schrodinger/pymol-open-source
+  UPSTREAM_BRANCH: main      # change to 'main' if upstream uses main
+  UNSTABLE_BRANCH: unstable    # branch where upstream changes are merged
+  PRODUCTION_BRANCH: production # stable branch for PyPI releases
+  PR_BRANCH_PREFIX: sync/upstream-
+
+jobs:
+  sync:
+    name: Merge upstream → tests → PR
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout fork (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git author
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Add and fetch upstream remote
+        run: |
+          git remote add upstream https://github.com/${{ env.UPSTREAM_REPO }} || true
+          git fetch upstream ${{ env.UPSTREAM_BRANCH }}
+          git fetch origin ${{ env.UNSTABLE_BRANCH }}
+
+      - name: Checkout unstable branch
+        run: git checkout ${{ env.UNSTABLE_BRANCH }}
+
+      - name: Merge upstream/${{ env.UPSTREAM_BRANCH }} into unstable
+        run: |
+          set -e
+          git merge --no-ff --no-edit upstream/${{ env.UPSTREAM_BRANCH }} || {
+            echo "❌ Merge conflict. Please resolve manually." >&2
+            git merge --abort || true
+            exit 1
+          }
+          git push origin ${{ env.UNSTABLE_BRANCH }}
+
+      - name: Run tests on unstable
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pytest -q || exit 1
+
+      - name: Detect if unstable has diverged from production
+        id: changes
+        run: |
+          if git diff --quiet origin/${{ env.PRODUCTION_BRANCH }} origin/${{ env.UNSTABLE_BRANCH }}; then
+            echo "HAS_CHANGES=false" >> $GITHUB_ENV
+            echo "No new changes to propose for production."
+          else
+            echo "HAS_CHANGES=true" >> $GITHUB_ENV
+
+      - name: Create Pull Request from unstable → production
+        if: env.HAS_CHANGES == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          title: "Promote unstable → production"
+          body: |
+            This PR promotes the current `unstable` branch (with merged upstream changes)
+            into `production`, preparing for the next PyPI release.
+            
+            Tests passed ✅
+          commit-message: "chore: merge unstable into production"
+          branch: ${{ env.UNSTABLE_BRANCH }}       # use unstable as the PR branch
+          base: ${{ env.PRODUCTION_BRANCH }}
+          delete-branch: false
+          labels: |
+            automated
+            release-candidate

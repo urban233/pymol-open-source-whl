@@ -3,7 +3,10 @@ name: Sync with Upstream (unstable → production)
 on:
   schedule:
     - cron: "0 4 * * 0"  # Every Sunday at 04:00 UTC
-  workflow_dispatch:       # Allow manual trigger from the Actions tab
+  workflow_dispatch: # Allow manual trigger from the Actions tab
+  push:
+    branches:
+      - unstable # Trigger if unstable branch is pushed to
 
 permissions:
   contents: write

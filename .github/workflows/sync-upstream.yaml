@@ -23,6 +23,7 @@ env:
   UNSTABLE_BRANCH: unstable    # branch where upstream changes are merged
   PRODUCTION_BRANCH: production # stable branch for PyPI releases
   PR_BRANCH_PREFIX: sync/upstream-
+  VCPKG_ROOT: ${{ github.workspace }}/vendor/vcpkg
 
 jobs:
   sync:

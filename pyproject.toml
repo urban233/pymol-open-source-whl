@@ -9,7 +9,7 @@ build-backend = "scikit_build_core.build"
 [project]
 name = "pymol-open-source-whl"
 readme = "README.md"
-version = "3.1.0.4"
+version = "3.1.0.4a1+1"
 requires-python = ">=3.10"
 license = {file = "LICENSE"}
 #description = """

@@ -46,6 +46,10 @@ jobs:
       - name: Checkout unstable branch
         run: git checkout ${{ env.UNSTABLE_BRANCH }}
 
+      - name: Configure Git merge driver
+        run: |
+          git config merge.ours.driver true
+
       - name: Merge upstream/${{ env.UPSTREAM_BRANCH }} into unstable
         run: |
           set -e

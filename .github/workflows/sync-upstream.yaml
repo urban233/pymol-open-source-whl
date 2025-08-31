@@ -16,7 +16,7 @@ concurrency:
 
 env:
   UPSTREAM_REPO: schrodinger/pymol-open-source
-  UPSTREAM_BRANCH: main      # change to 'main' if upstream uses main
+  UPSTREAM_BRANCH: master      # change to 'main' if upstream uses main
   UNSTABLE_BRANCH: unstable    # branch where upstream changes are merged
   PRODUCTION_BRANCH: production # stable branch for PyPI releases
   PR_BRANCH_PREFIX: sync/upstream-

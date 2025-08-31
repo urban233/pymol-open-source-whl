@@ -1,3 +1,5 @@
 *.pkl binary
 # Always keep our fork's version of pyproject.toml
 pyproject.toml merge=ours
+# Always keep our fork's GitHub Actions workflows
+.github/workflows/build.yml merge=ours

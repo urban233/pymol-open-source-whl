@@ -15,9 +15,8 @@
 name: Build Nightly Wheels
 
 on:
-  push:
-    branches:
-      - unstable
+  schedule:
+    - cron: "0 2 * * *"  # Every day at 02:00 UTC
 
 env:
   VCPKG_ROOT: ${{ github.workspace }}/vendor/vcpkg

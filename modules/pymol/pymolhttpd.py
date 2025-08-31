@@ -9,27 +9,17 @@
 
 # we make extensive use of Python's build-in in web infrastructure
 
-import sys
-
-if True:
-    import http.server as BaseHTTPServer
-    import io as StringIO
-    import urllib.parse as urlparse
-    from urllib.request import urlopen
-
-import cgi
+import os
 import socket
+import sys
+import threading
+import traceback
+import json
+import io as StringIO
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib import parse
+from urllib.request import urlopen
 
-# we also rely upon Python's json infrastructure
-
-try:
-    import simplejson as json
-except:
-    import json
-
-# standard Python dependencies
-
-import types, os, sys, traceback, threading
 
 # NOTE: Let's attempt to follow Python PEP 8 for coding style for this
 # source code file.   URL: http://www.python.org/de/peps/pep-0008
@@ -42,7 +32,7 @@ import types, os, sys, traceback, threading
 
 _json_mime_types = [ 'text/json', 'application/json' ]
 
-class _PymolHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
+class _PymolHTTPRequestHandler(BaseHTTPRequestHandler):
 
     # for now, we're using a single-threaded server
 
@@ -62,7 +52,7 @@ class _PymolHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
 
     def log_message(self, format, *args):
         if self.server.pymol_logging:
-            BaseHTTPServer.BaseHTTPRequestHandler.log_message(self,format,
+            BaseHTTPRequestHandler.log_message(self,format,
                                                               *args)
     def process_request(self):
         """
@@ -88,26 +78,22 @@ class _PymolHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     def parse_args(self):
         """
         parses URL arguments into a urlpath (before the ?)
-        and a cgiFieldStorage object (args after the ?).
-        for example:
-        http://localhost:8080/apply/pymol.cmd.color?color=blue&selection=benz
-        would yield self.fs.getvalue("color")       as "blue"
-        and           self.fs.getvalue("selection") as "benz"
+        Example:
+            http://localhost:8080/apply/pymol.cmd.color?color=blue&selection=benz
+            qsl == "color=blue&selection=benz"
+            parse.parse_qs(qs) == {'color': ['blue'], 'selection': ['benz']}
         self.urlpath would be "/apply/pymol.cmd.color"
         """
-        if (self.command == "POST"):
-            self.fs = cgi.FieldStorage(fp=self.rfile, headers=self.headers,
-                                       environ = {'REQUEST_METHOD':'POST'},
-                                       keep_blank_values = 1)
+        self.fs = {}
+
+        if self.command == "POST":
+            self.fs = self.headers
             self.urlpath = self.path
-        elif (self.command == "GET"):
-            scheme,netloc,path,params,qs,fragment = urlparse.urlparse(self.path)
-            self.fs = cgi.FieldStorage(environ = {'REQUEST_METHOD':'GET',
-                                                  'QUERY_STRING':qs},
-                                       keep_blank_values = 1)
+
+        elif self.command == "GET":
+            _, _, path, _, qs, _ = parse.urlparse(self.path)
+            self.fs = parse.parse_qs(qs, keep_blank_values=True)
             self.urlpath = path
-        else:
-            self.fs = None
 
     def process_urlpath(self):
         """
@@ -230,26 +216,39 @@ class _PymolHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         query_kwds = {}
         send_multi_result_list = False
 
-        for k in self.fs.keys():
-            if k[0:1] == '_': # leading-underscore argument (special handling)
-                if k == '_callback':
-                    self.callback = self.fs.getfirst(k)
-                elif k == '_json': # main path for Javascript API
-                    method = json.loads(self.fs.getfirst(k))
+        for key, value in self.fs.items():
+            first_value = value[0]
+
+            # leading-underscore argument (special handling)
+            if key[0:1] == "_":
+
+                if key == "_callback":
+                    self.callback = first_value
+
+                # main path for Javascript API
+                elif key == "_json":
                     # [ "my_method", [ arg1, ... ] , { 'key1' : 'val1, ... } ]
                     # or
                     # [ [ "my_met1", [ arg1, ... ], { 'key1' : 'val1, ... } ],
                     #   [ "my_met2", [ arg1, ... ], { 'key1' : 'val1, ... } ] ]
-                elif k == '_method': # tentative, not in spec -- may disappear
+                    method = json.loads(first_value)
+
+                # tentative, not in spec -- may disappear
+                elif key == "_method":
                     # a method name "my_method"
-                    method = json.loads(self.fs.getfirst(k))
-                elif k == '_args': # tentative, not in spec -- may disappear
-                    args = json.loads(self.fs.getfirst(k))
-                elif k == '_kwds': # tentative, not in spec -- may disappear
-                    kwds = json.loads(self.fs.getfirst(k))
-                # other underscore arguments are ignored (not passed on)
-            elif k[0:1] != '_':
-                query_kwds[k] = self.fs.getfirst(k)
+                    method = json.loads(first_value)
+
+                # tentative, not in spec -- may disappear
+                elif key == "_args":
+                    args = json.loads(first_value)
+
+                # tentative, not in spec -- may disappear
+                elif key == "_kwds":
+                    kwds = json.loads(first_value)
+
+            # other underscore arguments are ignored (not passed on)
+            elif key[0:1] != "_":
+                query_kwds[key] = value[0]
 
         blocks = []
         if isinstance(method, str):
@@ -413,31 +412,29 @@ class _PymolHTTPRequestHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         for debugging requests
         """
         self.wfile_write("%s\n" % self.command)
-        if (self.fs):
-            for k in self.fs.keys():
-                self.wfile_write("%s = " % k)
-                # key can have multiple values, as with checkboxes,
-                # but also arbitrarily
-                if (isinstance(self.fs[k], list)):
-                    self.wfile_write("%s\n" % self.fs.getlist(k))
-                else:
-                    # key can be uploaded file
-                    if (self.fs[k].filename):
-                        self.wfile_write("%s\n" % self.fs[k].filename)
-                        fp = self.fs[k].file
-                        #self.wfile.write("FILE %s" % cgi.escape(repr(fp)))
-                        #self.wfile.write("%s\n" % fp.name)
-                        # fails for StringIO instances
-                        self.wfile_write("%s\n" % repr(fp))
-                        # two ways to get file contents
-                        #file_contents = self.fs.getvalue(k)
-                        #file_contents = fp.read()
-                        #self.wfile.write("%s" % file_contents)
-                    else:
-                        #plain-old key/value
-                        self.wfile_write("%s\n" % self.fs.getvalue(k))
-        else:
+        if not self.fs:
             self.wfile_write("No args\n")
+
+        for key, value in self.fs.items():
+            self.wfile_write("%s = " % key)
+
+            # key can have multiple values, as with checkboxes,
+            # but also arbitrarily
+            if (isinstance(value, list)):
+                self.wfile_write(f"{value}\n")
+                continue
+
+            # key can be uploaded file
+            if value.filename:
+                self.wfile_write(f"{self.fs[key].filename}\n")
+                fp = value.file
+                self.wfile_write(f"{repr(fp)}\n")
+                # two ways to get file contents
+                #file_contents = self.fs.getvalue(k)
+                #file_contents = fp.read()
+                #self.wfile.write("%s" % file_contents)
+            else:
+                self.wfile_write(f"{value}\n")
 
 # this is the public class we're exposing to PyMOL consortium members
 
@@ -475,7 +472,7 @@ class PymolHttpd:
 
         session['pymol.cmd.label'] = self_cmd.label2 # no-eval version
 
-        self.server = BaseHTTPServer.HTTPServer(('', self.port),
+        self.server = HTTPServer(('', self.port),
                                                 _PymolHTTPRequestHandler)
         self.server.wrap_natives = wrap_natives
         self.server.custom_headers = headers

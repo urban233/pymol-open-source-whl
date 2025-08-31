@@ -45,7 +45,6 @@ bool CheckGLErrorOK(PyMOLGlobals* G, std::string_view errString)
     } else {
       printf("GL_ERROR : 0x%04x %s\n", err, errString.data());
     }
-    std::terminate();
 #endif
   }
   return err == 0;

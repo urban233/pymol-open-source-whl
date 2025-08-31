@@ -12,7 +12,7 @@
 # -*
 # Z* -------------------------------------------------------------------
 
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Union
 from collections import defaultdict
 from pymol import parsing
 
@@ -30,7 +30,7 @@ class Shortcut:
             if filter_leading_underscore
             else keywords
         )
-        self.shortcut: dict[str, str | int] = {}
+        self.shortcut: dict[str, Union[str, int]] = {}
         self.abbreviation_dict = defaultdict(list)
 
         for keyword in self.keywords:
@@ -41,7 +41,7 @@ class Shortcut:
     def __contains__(self, keyword: str) -> bool:
         return keyword in self.shortcut
 
-    def __getitem__(self, keyword: str) -> Optional[int | str]:
+    def __getitem__(self, keyword: str) -> Optional[Union[int, str]]:
         return self.shortcut.get(keyword)
 
     def __delitem__(self, keyword: str) -> None:
@@ -128,7 +128,7 @@ class Shortcut:
 
     def interpret(
         self, keyword: str, mode: bool = False
-    ) -> Optional[int | str | list[str]]:
+    ) -> Optional[Union[int, str, list[str]]]:
         """
         Returns None (no hit), str (one hit) or list (multiple hits)
 
@@ -172,7 +172,7 @@ class Shortcut:
 
     def auto_err(
         self, keyword: str, descrip: Optional[str] = None
-    ) -> Optional[int | str | list[str]]:
+    ) -> Optional[Union[int, str, list[str]]]:
         """
         Automatically raises an error if a keyword is unknown or ambiguous.
 

@@ -50,14 +50,11 @@ jobs:
         run: git checkout ${{ env.UNSTABLE_BRANCH }}
 
       - name: Configure Git merge driver
-        run: |
-          git config merge.ours.driver true
+        run: git config merge.ours.driver true
 
       - name: Merge upstream/${{ env.UPSTREAM_BRANCH }} into unstable
         run: |
           set -e
-#          git merge -s recursive -X ours upstream/${{ env.UPSTREAM_BRANCH }} || echo "Merge completed with our changes"
-#          git merge --no-ff --no-edit upstream/${{ env.UPSTREAM_BRANCH }} || {
           git merge -s recursive -X ours upstream/${{ env.UPSTREAM_BRANCH }} || {
             echo "❌ Merge conflict. Please resolve manually." >&2
             git merge --abort || true

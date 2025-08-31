@@ -143,21 +143,21 @@ class PyMOLGLWidget(BaseGLWidget):
         return super(PyMOLGLWidget, self).event(ev)
 
     def gestureEvent(self, ev):
-        gesture = ev.gesture(Qt.PinchGesture)
+        gesture = ev.gesture(Qt.GestureType.PinchGesture)
 
         if gesture is None:
             return False
 
-        if gesture.state() == Qt.GestureStarted:
+        if gesture.state() == Qt.GestureState.GestureStarted:
             self.pinch_start_z = self.cmd.get_view()[11]
 
         changeFlags = gesture.changeFlags()
 
-        if changeFlags & QtWidgets.QPinchGesture.RotationAngleChanged:
+        if changeFlags & QtWidgets.QPinchGesture.ChangeFlag.RotationAngleChanged:
             delta = gesture.lastRotationAngle() - gesture.rotationAngle()
             self.cmd.turn('z', delta)
 
-        if changeFlags & QtWidgets.QPinchGesture.ScaleFactorChanged:
+        if changeFlags & QtWidgets.QPinchGesture.ChangeFlag.ScaleFactorChanged:
             view = list(self.cmd.get_view())
 
             # best guess for https://bugreports.qt.io/browse/QTBUG-48138

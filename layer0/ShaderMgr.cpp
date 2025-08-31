@@ -1826,7 +1826,8 @@ void CShaderMgr::setDrawBuffer(GLFramebufferConfig config)
   if (config.drawBuffer == GL_BACK) {
     config = defaultBackbuffer;
   }
-  if (config.framebuffer == defaultBackbuffer.framebuffer) {
+  if (glBindFramebuffer != nullptr &&
+      config.framebuffer == defaultBackbuffer.framebuffer) {
     glBindFramebuffer(GL_FRAMEBUFFER, config.framebuffer);
     setDrawBuffer(config.drawBuffer);
     return;

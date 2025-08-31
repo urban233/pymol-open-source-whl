@@ -1,3 +1,5 @@
+from typing import Union
+
 import pytest
 
 from pymol.shortcut import Shortcut
@@ -48,7 +50,7 @@ def test_all_keywords(sc: Shortcut):
     ],
 )
 def test_full_prefix_hits(
-    sc: Shortcut, prefixs: list[str], expected_result: str | list[str]
+    sc: Shortcut, prefixs: list[str], expected_result: Union[str, list[str]]
 ):
     for prefix in prefixs:
         result = sc.interpret(prefix)

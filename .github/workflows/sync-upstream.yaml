@@ -52,14 +52,15 @@ jobs:
       - name: Configure Git merge driver
         run: git config merge.ours.driver true
 
-      - name: Merge upstream/${{ env.UPSTREAM_BRANCH }} into unstable
+      - name: Merge upstream into unstable (keep fork deletions/overrides)
         run: |
           set -e
-          git merge -s recursive -X ours upstream/${{ env.UPSTREAM_BRANCH }} || {
-            echo "❌ Merge conflict. Please resolve manually." >&2
-            git merge --abort || true
-            exit 1
-          }
+          git merge -s recursive -X ours upstream/${{ env.UPSTREAM_BRANCH }} || true  
+          git checkout --ours pyproject.toml || true
+          git add pyproject.toml
+          git rm -f .github/workflows/build.yml || true
+          git add -u
+          git commit -m "Merge upstream/${{ env.UPSTREAM_BRANCH }} into unstable, keeping fork deletions/overrides" || echo "No commit needed"
           git push origin ${{ env.UNSTABLE_BRANCH }}
 
       - name: Run tests on unstable

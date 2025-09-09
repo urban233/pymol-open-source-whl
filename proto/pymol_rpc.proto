@@ -1,0 +1,183 @@
+syntax = "proto3";
+
+message Empty {}
+
+message StatusResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message Vector3 {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+}
+
+message ColorRGB {
+  float r = 1;
+  float g = 2;
+  float b = 3;
+}
+
+message CommandRequest {
+  string command = 1;
+}
+
+message CommandResponse {
+  string result = 1;
+}
+
+message LabelRequest {
+  Vector3 pos = 1;
+  string text = 2;
+  string id = 3;
+  ColorRGB color = 4;
+}
+
+message SphereRequest {
+  Vector3 pos = 1;
+  float radius = 2;
+  ColorRGB color = 3;
+  string id = 4;
+  bool extend = 5;
+  bool transparent = 6;
+  float transparency = 7;
+}
+
+message CylinderRequest {
+  Vector3 end1 = 1;
+  Vector3 end2 = 2;
+  float radius = 3;
+  ColorRGB color1 = 4;
+  optional ColorRGB color2 = 5;
+  string id = 6;
+  bool extend = 7;
+  bool transparent = 8;
+  float transparency = 9;
+}
+
+message LoadMolRequest {
+  string data = 1;
+  string obj_name = 2;
+  optional string color_scheme = 3;
+  bool replace = 4;
+}
+
+message LoadFileRequest {
+  string file_name = 1;
+  string obj_name = 2;
+  optional string format = 3;
+  optional string color_scheme = 4;
+  bool replace = 5;
+}
+
+message LoadSurfaceRequest {
+  oneof source {
+    string data = 1;
+    string file_name = 2;
+  }
+  string obj_name = 3;
+  optional string format = 4;
+  float surface_level = 5;
+}
+
+message GetNamesRequest {
+  string what = 1;
+  bool enabled_only = 2;
+}
+
+message GetNamesResponse {
+  repeated string names = 1;
+}
+
+message GetAtomCoordsRequest {
+  string selection = 1;
+  int32 state = 2;
+}
+
+message GetAtomCoordsResponse {
+  repeated Vector3 coordinates = 1;
+}
+
+/* --- Backward compatibility requests --- */
+
+message ObjectRequest {
+  string name = 1;
+}
+
+message SelectionRequest {
+  string selection = 1;
+}
+
+message CenterRequest {
+  string selection = 1;
+  bool animate = 2;
+}
+
+message ZoomRequest {
+  string selection = 1;
+  float buffer = 2;
+  int32 state = 3;
+  bool animate = 4;
+}
+
+message RotateRequest {
+  string axis = 1;
+  float angle = 2;
+  string selection = 3;
+}
+
+message MoveRequest {
+  string axis = 1;
+  float distance = 2;
+  string selection = 3;
+}
+
+message ShowHideRequest {
+  string representation = 1;
+  string selection = 2;
+}
+
+message ColorRequest {
+  string color = 1;
+  string selection = 2;
+}
+
+message TransparencyRequest {
+  float transparency = 1;
+  string selection = 2;
+}
+
+service PyMolRPC {
+  rpc Ping(Empty) returns (StatusResponse);
+  rpc Do(CommandRequest) returns (CommandResponse);
+
+  rpc Label(LabelRequest) returns (StatusResponse);
+  rpc Sphere(SphereRequest) returns (StatusResponse);
+  rpc Cylinder(CylinderRequest) returns (StatusResponse);
+
+  rpc LoadPDB(LoadMolRequest) returns (CommandResponse);
+  rpc LoadMolBlock(LoadMolRequest) returns (CommandResponse);
+  rpc LoadFile(LoadFileRequest) returns (CommandResponse);
+  rpc LoadSurface(LoadSurfaceRequest) returns (CommandResponse);
+
+  rpc GetNames(GetNamesRequest) returns (GetNamesResponse);
+  rpc GetAtomCoords(GetAtomCoordsRequest) returns (GetAtomCoordsResponse);
+
+  // Backward compatibility methods
+  rpc DeleteObject(ObjectRequest) returns (StatusResponse);
+  rpc DeleteAll(Empty) returns (StatusResponse);
+
+  rpc Center(CenterRequest) returns (StatusResponse);
+  rpc Zoom(ZoomRequest) returns (StatusResponse);
+  rpc Rotate(RotateRequest) returns (StatusResponse);
+  rpc Move(MoveRequest) returns (StatusResponse);
+
+  rpc Hide(ShowHideRequest) returns (StatusResponse);
+  rpc Show(ShowHideRequest) returns (StatusResponse);
+  rpc Color(ColorRequest) returns (StatusResponse);
+  rpc SetTransparency(TransparencyRequest) returns (StatusResponse);
+
+  rpc Select(SelectionRequest) returns (StatusResponse);
+  rpc DeleteSelection(SelectionRequest) returns (StatusResponse);
+}

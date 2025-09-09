@@ -519,7 +519,17 @@ if True:
                     for a in pymolrc] + options.deferred
             options.pymolrc = pymolrc
         if options.rpcServer:
-            options.deferred.append('_do__ /import pymol.rpc;pymol.rpc.launch_XMLRPC()')
+            # Replaced old XML-RPC implementation with modern gRPC implementation.
+            # However, to enforce this change, it uses the same command line argument.
+            # This enforcement comes from clear security concerns, like vulnerabilities in the
+            # Apache XML RPC Client Library (https://mvnrepository.com/artifact/org.apache.xmlrpc/xmlrpc-client/3.1.3)
+            # that has its last official release in 2010.
+            # It contains two Vulnerabilities from dependencies:
+            # CVE-2016-5004: https://www.cve.org/CVERecord?id=CVE-2016-5004
+            # CVE-2012-5783: https://www.cve.org/CVERecord?id=CVE-2012-5783
+            #
+            # options.deferred.append('_do__ /import pymol.rpc;pymol.rpc.launch_XMLRPC()')
+            options.deferred.append('_do__ /import pymol.pml_grpc;pymol.pml_grpc.launch_gRPC()')
         if options.plugins == 1:
             # Load plugins independent of PMGApp (will not add menu items)
             options.deferred.append('_do__ /import pymol.plugins;pymol.plugins.initialize(-1)')

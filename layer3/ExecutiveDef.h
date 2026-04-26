@@ -7,10 +7,13 @@
 
 class SpecRec;
 class CGO;
-struct _CObject;
 struct CTracker;
-struct _OVLexicon;
-struct ExecutiveObjectOffset;
+struct OVLexicon;
+
+struct ExecutiveObjectOffset{
+  ObjectMolecule *obj;
+  int atm;
+};
 
 
 

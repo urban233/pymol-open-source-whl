@@ -71,6 +71,8 @@
 #include "OpenVRMode.h"
 #endif
 
+#include "Property.h"
+
 #include "PyMOL.h"
 #include "PyMOLGlobals.h"
 #include "PyMOLOptions.h"
@@ -1201,6 +1203,7 @@ PyMOLreturn_status PyMOL_CmdBackgroundColor(CPyMOL * I, const char *value) {
   int idx = ColorGetIndex(I->G, value);
   if(idx >= 0){
     SettingSetGlobal_i(I->G, cSetting_bg_rgb, idx);
+    SettingGenerateSideEffects(I->G, cSetting_bg_rgb, nullptr, -1, 0);
   } else {
     ErrMessage(I->G, "Color", "Bad color name.");
   }
@@ -1938,6 +1941,7 @@ void PyMOL_Start(CPyMOL * I)
   ShaderMgrInit(G);
   G->GFXMgr = new GFXManager(G->ShaderMgr);
   SettingInitGlobal(G, true, true, false);
+  PropertyInit(G);
   SettingSetGlobal_i(G, cSetting_internal_gui, G->Option->internal_gui);
   SettingSetGlobal_i(G, cSetting_internal_feedback, G->Option->internal_feedback);
   TextureInit(G);
@@ -2044,6 +2048,7 @@ void PyMOL_Stop(CPyMOL * I)
   TextureFree(G);
   SphereFree(G);
   PlugIOManagerFree(G);
+  PropertyFree(G);
   PFree(G);
   CGORendererFree(G);
   ColorFree(G);

@@ -541,7 +541,7 @@ Rep *RepSphereNew(CoordSet * cs, int state)
     }
     ok &= !G->Interrupt;
   }
-    MapType *map = MapNew(G, SPHERE_NORMAL_RANGE, v_tmp, nspheres, nullptr);
+    MapType *map = new MapType(G, SPHERE_NORMAL_RANGE, v_tmp, nspheres, nullptr);
     float cut_mult = SphereComputeCutMultiplier(G->Sphere->Sphere[1]);
     float *dot = G->Sphere->Sphere[1]->dot[0];
     int n_dot = G->Sphere->Sphere[1]->nDot;

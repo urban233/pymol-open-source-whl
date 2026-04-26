@@ -52,25 +52,25 @@ typedef struct {
   int vert4, tri2;
 } EdgeRec;
 
-typedef struct {
+struct TriangleSurfaceRec {
   PyMOLGlobals *G;
   int *activeEdge;              /* active edges */
   int nActive;
   int *edgeStatus;
   int *vertActive;
   int *vertWeight;
-  int *tri;
+  std::vector<int> tri;
   int nTri;
   float *vNormal;               /* normal vector for first triangle of an active edge */
   EdgeRec *edge;
   int nEdge;
   MapType *map;
-  MapCache map_cache;
+  MapCacheType map_cache{};
   LinkType *link;
   int nLink;
   int N;
   float maxEdgeLenSq;
-} TriangleSurfaceRec;
+};
 
 int TriangleDegenerate(float *v1, float *n1, float *v2, float *n2, float *v3, float *n3)
 {
@@ -109,28 +109,28 @@ static int TriangleEdgeStatus(TriangleSurfaceRec * II, int i1, int i2)
   return (0);
 }
 
-static int *TriangleMakeStripVLA(TriangleSurfaceRec * II, float *v, float *vn, int n)
+static std::vector<int> TriangleMakeStripVLA(
+    TriangleSurfaceRec* II, float* v, float* vn, int n)
 {
   TriangleSurfaceRec *I = II;
   int *tFlag, tmp_int;
   int c, a, cc = 0;
-  int *s, *sc, *strip;
+  int *s, *sc;
   int state, s01, i0, i1, i2, tc, t0 = 0;
-  int *t;
   int done;
   int dir, dcnt;
   int flag;
   float *v0, *v1, *v2, vt1[3], vt2[3], *tn0, *tn1, *tn2, tn[3], xtn[3];
 
-  strip = VLAlloc(int, I->nTri * 4);    /* strip VLA is count,vert,vert,...count,vert,vert...zero */
+  std::vector<int> strip(I->nTri * 4);    /* strip VLA is count,vert,vert,...count,vert,vert...zero */
   tFlag = pymol::malloc<int>(I->nTri);
   for(a = 0; a < I->nTri; a++)
     tFlag[a] = 0;
-  s = strip;
+  s = strip.data();
   done = false;
   while(!done) {
     done = true;
-    t = I->tri;
+    auto* t = I->tri.data();
     dir = 0;
     for(a = 0; a < I->nTri; a++) {
       if(!tFlag[a]) {
@@ -268,9 +268,8 @@ static int *TriangleMakeStripVLA(TriangleSurfaceRec * II, float *v, float *vn, i
       if(!tFlag[a]) {
         /*                printf("missed %i %i %i\n",*(I->tri+3*a),*(I->tri+3*a+1), *(I->tri+3*a+2)); */
         *(s++) = 1;
-        *(s++) = *(I->tri + 3 * a);
-        *(s++) = *(I->tri + 3 * a + 1);
-        *(s++) = *(I->tri + 3 * a + 2);
+        std::copy_n(&I->tri[3 * a], 3, s);
+        s += 3;
 
         /* make sure vertices follow standard convention */
 
@@ -316,7 +315,7 @@ static int TriangleAdjustNormals(TriangleSurfaceRec * II, float *v, float *vn, i
   float *tNorm = nullptr, *tWght;
   int *vFlag = nullptr;
   float *v0, *v1, *v2, *tn, vt1[3], vt2[3], *vn0, *tn0, *tn1, *tn2, *tw;
-  int a, *t, i0, i1, i2;
+  int a, i0, i1, i2;
   float tmp[3];
   tNorm = pymol::malloc<float>(3 * I->nTri);
   tWght = pymol::malloc<float>(I->nTri);
@@ -325,7 +324,7 @@ static int TriangleAdjustNormals(TriangleSurfaceRec * II, float *v, float *vn, i
     vFlag[a] = 0;
   }
   /* first, calculate and store all triangle normals & weights */
-  t = I->tri;
+  auto t = I->tri.data();
   tn = tNorm;
   tw = tWght;
   for(a = 0; a < I->nTri; a++) {
@@ -355,20 +354,24 @@ static int TriangleAdjustNormals(TriangleSurfaceRec * II, float *v, float *vn, i
   /* sum */
   tn = tNorm;
   tw = tWght;
-  t = I->tri;
-  for(a = 0; a < I->nTri; a++) {
-    i0 = *(t++);
-    i1 = *(t++);
-    i2 = *(t++);
-    scale3f(tn, *tw, tmp);
-    tn0 = vn + i0 * 3;
-    tn1 = vn + i1 * 3;
-    tn2 = vn + i2 * 3;
-    add3f(tmp, tn0, tn0);
-    add3f(tmp, tn1, tn1);
-    add3f(tmp, tn2, tn2);
-    tn += 3;
-    tw++;
+  t = I->tri.data();
+  if (ok){
+    ok &= !I->G->Interrupt;
+    for(a = 0; ok && a < I->nTri; a++) {
+      i0 = *(t++);
+      i1 = *(t++);
+      i2 = *(t++);
+      scale3f(tn, *tw, tmp);
+      tn0 = vn + i0 * 3;
+      tn1 = vn + i1 * 3;
+      tn2 = vn + i2 * 3;
+      add3f(tmp, tn0, tn0);
+      add3f(tmp, tn1, tn1);
+      add3f(tmp, tn2, tn2);
+      tn += 3;
+      tw++;
+      ok &= !I->G->Interrupt;
+    }
   }
   /* normalize */
   vn0 = vn;
@@ -393,7 +396,7 @@ static int TriangleAdjustNormals(TriangleSurfaceRec * II, float *v, float *vn, i
         *(va0++) = 0.0F;
       }
       max_cyc--;
-      t = I->tri;
+      auto t = I->tri.data();
       tn = tNorm;
       for(a = 0; a < I->nTri; a++) {
         i0 = *(t++);
@@ -610,7 +613,7 @@ static void TriangleAdd(TriangleSurfaceRec * II, int i0, int i1, int i2, float *
   float vt[3], vt1[3], vt2[3], vt3[3];
   int e1, e2, e3, h, j, k, l;
   MapType *map = I->map;
-  MapCache *cache = &I->map_cache;
+  auto* cache = &I->map_cache;
 
   v0 = v + 3 * i0;
   v1 = v + 3 * i1;
@@ -627,21 +630,21 @@ static void TriangleAdd(TriangleSurfaceRec * II, int i0, int i1, int i2, float *
 
   if(e1) {
     j = map->EList[e1];
-    MapCache(cache, j);
+    cache->cache(j);
   }
 
   MapLocus(map, v1, &h, &k, &l);
   e2 = *(MapEStart(map, h, k, l));
   if(e2 && (e1 != e2)) {
     j = map->EList[e2];
-    MapCache(cache, j);
+    cache->cache(j);
   }
 
   MapLocus(map, v2, &h, &k, &l);
   e3 = *(MapEStart(map, h, k, l));
   if(e3 && (e3 != e2) && (e3 != e1)) {
     j = map->EList[e3];
-    MapCache(cache, j);
+    cache->cache(j);
   }
 
   /* make sure the triangle obeys the right hand rule */
@@ -682,7 +685,7 @@ static void TriangleAdd(TriangleSurfaceRec * II, int i0, int i1, int i2, float *
   s12 = TriangleEdgeStatus(I, i1, i2);
 
   /* create a new triangle */
-  VLACheck(I->tri, int, (I->nTri * 3) + 2);
+  VecCheck(I->tri, (I->nTri * 3) + 2);
   I->tri[I->nTri * 3] = i0;
   I->tri[I->nTri * 3 + 1] = i1;
   I->tri[I->nTri * 3 + 2] = i2;
@@ -1620,14 +1623,11 @@ static int TriangleFill(TriangleSurfaceRec * II, float *v, float *vn, int n,
   int n_pass = 0;
   int first_vert = 0, first_vert_used = 0;
 
-  MapType *map;
-  MapCache *cache;
-
   PRINTFD(I->G, FB_Triangle)
     " TriangleFill-Debug: entered: n=%d\n", n ENDFD;
 
-  map = I->map;
-  cache = &I->map_cache;
+  auto* map = I->map;
+  auto* cache = &I->map_cache;
 
   lastTri3 = -1;
   while(ok && (lastTri3 != I->nTri)) {
@@ -1673,8 +1673,8 @@ static int TriangleFill(TriangleSurfaceRec * II, float *v, float *vn, int n,
       }
       if(i1 >= 0) {
 
-        if(!MapCached(cache, first_vert_used)) {
-          MapCache(cache, first_vert_used);
+        if(!cache->cached(first_vert_used)) {
+          cache->cache(first_vert_used);
           if(first_time) {
             n_pass = n_pass / 2;
             /* if we've entered a new map quadrant then half the effective number of passes */
@@ -2277,19 +2277,18 @@ static int TriangleBruteForceClosure(TriangleSurfaceRec * II, float *v, float *v
   return ok;
 }
 
-int *TrianglePointsToSurface(PyMOLGlobals * G, float *v, float *vn, int n,
-                             float cutoff, int *nTriPtr, int **stripPtr,
-                             float *extent, int cavity_mode)
+std::vector<int> TrianglePointsToSurface(PyMOLGlobals* G, float* v, float* vn,
+    int n, float cutoff, int* nTriPtr, std::vector<int>& stripPtr, float* extent,
+    int cavity_mode)
 {
-  TriangleSurfaceRec *I = nullptr;
   int ok = true;
-  int *result = nullptr;
+  std::vector<int> result;
   MapType *map;
   int a;
 
   if(n >= 3) {
-    I = pymol::malloc<TriangleSurfaceRec>(1);
-    CHECKOK(ok, I);
+    auto I = std::make_unique<TriangleSurfaceRec>();
+    CHECKOK(ok, I.get());
     if(ok) {
       float maxEdgeLen = 0.0F;
   
@@ -2297,18 +2296,27 @@ int *TrianglePointsToSurface(PyMOLGlobals * G, float *v, float *vn, int n,
       I->N = n;
       I->nActive = 0;
       I->activeEdge = VLAlloc(int, 1000);
-
-      I->link = VLAlloc(LinkType, n * 2);
-      UtilZeroMem(I->link, sizeof(LinkType));
-      I->nLink = 1;
-
-      I->vNormal = VLAlloc(float, n * 2);
-      I->edge = VLAlloc(EdgeRec, n * 2);
-      UtilZeroMem(I->edge, sizeof(EdgeRec));
-      I->nEdge = 1;
-
-      I->tri = VLAlloc(int, n);
-      I->nTri = 0;
+      CHECKOK(ok, I->activeEdge);
+      if (ok)
+	I->link = VLAlloc(LinkType, n * 2);
+      CHECKOK(ok, I->link);
+      if (ok){
+	UtilZeroMem(I->link, sizeof(LinkType));
+	I->nLink = 1;
+      }
+      if (ok)
+	I->vNormal = VLAlloc(float, n * 2);
+      CHECKOK(ok, I->vNormal);
+      if (ok)
+	I->edge = VLAlloc(EdgeRec, n * 2);
+      CHECKOK(ok, I->edge);
+      if (ok){
+	UtilZeroMem(I->edge, sizeof(EdgeRec));
+	I->nEdge = 1;
+	I->tri.resize(n);
+	CHECKOK(ok, !I->tri.empty());
+	I->nTri = 0;
+      }
 
       if(cavity_mode) {
         maxEdgeLen = (cutoff*1.414F);
@@ -2316,11 +2324,14 @@ int *TrianglePointsToSurface(PyMOLGlobals * G, float *v, float *vn, int n,
       } else {
         I->maxEdgeLenSq = FLT_MAX;
       }
-
-      I->map = MapNew(I->G, cutoff, v, n, extent);
-      MapSetupExpress(I->map);
+      if (ok)
+	I->map = new MapType(I->G, cutoff, v, n, extent);
+      CHECKOK(ok, I->map);
+      if (ok)
+	ok &= MapSetupExpress(I->map);
       map = I->map;
-      MapCacheInit(&I->map_cache, map, 0, 0);
+      if (ok)
+	      I->map_cache = MapCacheType(*map);
 
       if(G->Interrupt)
         ok = false;
@@ -2352,7 +2363,7 @@ int *TrianglePointsToSurface(PyMOLGlobals * G, float *v, float *vn, int n,
       }
 
       if(ok) {
-        ok = TriangleFill(I, v, vn, n, true);
+        ok = TriangleFill(I.get(), v, vn, n, true);
       }
 
       if(ok) {
@@ -2365,10 +2376,10 @@ int *TrianglePointsToSurface(PyMOLGlobals * G, float *v, float *vn, int n,
       }
 
       if(ok)
-        ok = TriangleTxfFolds(I, v, vn, n);
+        ok = TriangleTxfFolds(I.get(), v, vn, n);
 
       if(ok)
-        ok = TriangleFixProblems(I, v, vn, n);
+        ok = TriangleFixProblems(I.get(), v, vn, n);
 
       if(Feedback(G, FB_Triangle, FB_Debugging)) {
         for(a = 0; a < n; a++)
@@ -2378,19 +2389,19 @@ int *TrianglePointsToSurface(PyMOLGlobals * G, float *v, float *vn, int n,
 
       if(ok) {
         if(cavity_mode) {
-          ok = TriangleBruteForceClosure(I, v, vn, n, maxEdgeLen);
+          ok = TriangleBruteForceClosure(I.get(), v, vn, n, maxEdgeLen);
         } else {
-          ok = TriangleBruteForceClosure(I, v, vn, n, cutoff * 3);       
+          ok = TriangleBruteForceClosure(I.get(), v, vn, n, cutoff * 3);       
         }
       }
                                                            
       /* abandon algorithm, just CLOSE THOSE GAPS! */
 
       if(ok)
-        ok = TriangleAdjustNormals(I, v, vn, n, true);
+        ok = TriangleAdjustNormals(I.get(), v, vn, n, true);
 
       if(ok) {
-        *(stripPtr) = TriangleMakeStripVLA(I, v, vn, n);
+        stripPtr = TriangleMakeStripVLA(I.get(), v, vn, n);
       }
 
       (*nTriPtr) = I->nTri;
@@ -2401,17 +2412,15 @@ int *TrianglePointsToSurface(PyMOLGlobals * G, float *v, float *vn, int n,
       FreeP(I->edgeStatus);
       FreeP(I->vertActive);
       FreeP(I->vertWeight);
-      MapCacheFree(&I->map_cache, 0, 0);
       MapFree(map);
 
-      result = I->tri;
+      result = std::move(I->tri);
     }
-    FreeP(I);
   }
   if(!ok) {
-    VLAFreeP(result);
+    result.clear();
   }
-  return (result);
+  return result;
 }
 
 void CalculateTriangleNormal(float *p1, float *p2, float *p3, float *n){

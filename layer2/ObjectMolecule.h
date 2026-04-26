@@ -520,8 +520,12 @@ int ObjectMoleculeUpdateAtomTypeInfoForState(PyMOLGlobals * G, ObjectMolecule * 
 int ObjectMoleculeUpdateMMStereoInfoForState(PyMOLGlobals * G, ObjectMolecule * obj, int state, int initialize=1);
 #endif
 
-#ifdef _PYMOL_IP_PROPERTIES
-#endif
+PyObject* ObjectMoleculeGetProperty(
+    ObjectMolecule* I, const char* propname, int state, int quiet);
+
+enum class PropertyType;
+int ObjectMoleculeSetProperty(ObjectMolecule* I, const char* propname,
+    PyObject* value, const PropertyType& proptype, int state, int quiet);
 
 void AtomInfoSettingGenerateSideEffects(PyMOLGlobals * G, ObjectMolecule *obj, int index, int id);
 
@@ -532,6 +536,16 @@ int *AtomInfoGetSortedIndex(PyMOLGlobals * G,
 
 ObjectMolecule *ObjectMoleculeReadMmtfStr(PyMOLGlobals * G, ObjectMolecule * I,
     const char *st, int st_len, int frame, int discrete, int quiet, int multiplex, int zoom);
+
+/**
+ * @brief Reads a CIF file and creates animatable objects
+ * @param datablock CIF data block
+ * @param discrete Discrete object flag
+ * @param quiet Suppress output
+ * @return ObjectMolecule or nullptr on error
+ */
+ObjectMolecule* ObjectMoleculeReadCifData(PyMOLGlobals* G,
+    const pymol::cif_data* datablock, int discrete, bool quiet);
 pymol::Result<ObjectMolecule*> ObjectMoleculeReadCifStr(PyMOLGlobals * G, ObjectMolecule * I,
     const char *st, int frame, int discrete, int quiet, int multiplex, int zoom);
 pymol::Result<ObjectMolecule*> ObjectMoleculeReadBCif(PyMOLGlobals* G,

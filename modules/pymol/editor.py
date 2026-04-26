@@ -22,6 +22,17 @@ tmp2 = _prefix + "2"
 tmp3 = _prefix + "3"
 tmp4 = _prefix + "4"
 
+def _chain_sel(chain: str) -> str:
+    """
+    Format a chain identifier for use in PyMOL selection expressions.
+    Empty or whitespace-containing chain IDs must be quoted.
+    :param chain: original chain identifier
+    :return: formatted chain selection
+    """
+    if chain == '' or ' ' in chain:
+        return f"chain '{chain}'"
+    return f"chain {chain}"
+
 # routines to assist in molecular editing
 
 class undocontext:
@@ -712,12 +723,12 @@ def bond_single_stranded(tmp_editor, object, chain, resv, last_resi_sele, atom_s
 
     # Select and fuse
     _self.select(object_fuse, f"{last_resi_sele} & name {atom_selection_name}")
-    _self.fuse(f"{tmp_editor} & chain {chain} & name {atom_name_oppo}", object_fuse, mode=3)
-    _self.select(object_connect, f"{last_resi_sele} & name {atom_selection_name} & chain {chain}")
+    _self.fuse(f"{tmp_editor} & {_chain_sel(chain)} & name {atom_name_oppo}", object_fuse, mode=3)
+    _self.select(object_connect, f"{last_resi_sele} & name {atom_selection_name} & {_chain_sel(chain)}")
 
     # Target is on the new fragment
     object_bond_target = _prefix + f"_{chain}_con_target"
-    if (_self.select(object_bond_target, f"{object} & resi \\{resv} & name {atom_name_oppo} & chain {chain}") == 1):
+    if (_self.select(object_bond_target, f"{object} & resi \\{resv} & name {atom_name_oppo} & {_chain_sel(chain)}") == 1):
         bond_dist = _prefix + "_bond_dist"
         if (_self.select(bond_dist, f"{object_connect} within 3.0 of {object_bond_target}") != 0):
             _self.bond(object_connect, object_bond_target)
@@ -753,10 +764,10 @@ def bond_double_stranded(tmp_editor, object, chain, chain_oppo, resv, resv_oppo,
     # Select and fuse
     _self.select(object_fuse, f"{last_resi_sele} & name {atom_selection_name}")
     _self.select(object_oppo_fuse, f"{prev_oppo_res} & name {atom_name_oppo}")
-    _self.fuse(f"{tmp_editor} & chain {chain} & name {atom_name_oppo}", object_fuse, mode=3)
+    _self.fuse(f"{tmp_editor} & {_chain_sel(chain)} & name {atom_name_oppo}", object_fuse, mode=3)
 
-    if ((_self.select(object_bond_target, f"{object} & resi \\{resv} & name {atom_name_oppo} & chain {chain}") == 1) and
-        (_self.select(object_connect, f"{last_resi_sele} & name {atom_selection_name} & chain {chain}") == 1)):
+    if ((_self.select(object_bond_target, f"{object} & resi \\{resv} & name {atom_name_oppo} & {_chain_sel(chain)}") == 1) and
+        (_self.select(object_connect, f"{last_resi_sele} & name {atom_selection_name} & {_chain_sel(chain)}") == 1)):
         bond_dist = _prefix + "_bond_dist"
         if (_self.select(bond_dist, f"{object_connect} within 3.0 of {object_bond_target}") != 0):
             _self.bond(object_connect, object_bond_target)
@@ -765,8 +776,8 @@ def bond_double_stranded(tmp_editor, object, chain, chain_oppo, resv, resv_oppo,
     else:
         print("More than one bond target was found on selected chain, so this will not be bound.")
 
-    if ((_self.select(object_oppo_bond_target, f"{object} & resi \\{resv_oppo} & name {atom_selection_name} & chain {chain_oppo}") == 1) and
-        (_self.select(object_oppo_connect, f"{prev_oppo_res} & name {atom_name_oppo} & chain {chain_oppo}") == 1)):
+    if ((_self.select(object_oppo_bond_target, f"{object} & resi \\{resv_oppo} & name {atom_selection_name} & {_chain_sel(chain_oppo)}") == 1) and
+        (_self.select(object_oppo_connect, f"{prev_oppo_res} & name {atom_name_oppo} & {_chain_sel(chain_oppo)}") == 1)):
         bond_dist = _prefix + "_bond_dist"
         if (_self.select(bond_dist, f"{object_oppo_connect} within 3.0 of {object_oppo_bond_target}") != 0):
             _self.bond(object_oppo_connect, object_oppo_bond_target)
@@ -862,7 +873,7 @@ def extend_nuc_acid(nascent, nascent_partner, selection,
 
     # Alter the segi to match the chain selection
     chain_sele = "_chain_sele"
-    _self.select(chain_sele, f"chain {chain}")
+    _self.select(chain_sele, _chain_sel(chain))
     _self.alter(chain_sele,f"segi = '{chain}'")
     _self.delete(chain_sele)
 
@@ -898,7 +909,7 @@ def extend_nuc_acid(nascent, nascent_partner, selection,
         reverse = False if atom_selection_name == "O3'" else True
 
         last_resi_sele = _prefix + "_last_resi"
-        _self.select(last_resi_sele, f"(byobject {selection}) & chain {chain} & resi \\{last_resv}")
+        _self.select(last_resi_sele, f"(byobject {selection}) & {_chain_sel(chain)} & resi \\{last_resv}")
 
         if not nascent.dbl_helix:
             _self.alter(tmp_editor, f"chain='{chain}';segi='{chain}';resi=tmp_resv[0]",
@@ -940,8 +951,8 @@ def extend_nuc_acid(nascent, nascent_partner, selection,
                 first_oppo_atom = _prefix + "_first_oppo_atom"
                 same_oppo_res =  _prefix + "_same_oppo_atom"
 
-                _self.select(last_oppo_atom, f"last (({object} and chain {tmp_chain_oppo} and (not {tmp_editor})) and polymer.nuc)")
-                _self.select(first_oppo_atom, f"first (({object} and chain {tmp_chain_oppo} and (not {tmp_editor})) and polymer.nuc)")
+                _self.select(last_oppo_atom, f"last (({object} and {_chain_sel(tmp_chain_oppo)} and (not {tmp_editor})) and polymer.nuc)")
+                _self.select(first_oppo_atom, f"first (({object} and {_chain_sel(tmp_chain_oppo)} and (not {tmp_editor})) and polymer.nuc)")
                 base_pair_last = check_DNA_base_pair(last_oppo_atom, original_sele)
                 base_pair_first = check_DNA_base_pair(first_oppo_atom, original_sele)
 
@@ -997,7 +1008,7 @@ def extend_nuc_acid(nascent, nascent_partner, selection,
 
             # Alter the opposing segi to match chain
             chain_oppo_sele = "_chain_oppo_sele"
-            _self.select(chain_oppo_sele, f"chain {chain_oppo}")
+            _self.select(chain_oppo_sele, _chain_sel(chain_oppo))
             _self.alter(chain_oppo_sele,f"segi = '{chain_oppo}'")
             _self.delete(chain_oppo_sele)
 
@@ -1045,7 +1056,7 @@ def extend_nuc_acid(nascent, nascent_partner, selection,
             add2pO(tmp_domain, nascent.nuc_acid, resv)
 
     new_term = _prefix + "_new_selection"
-    _self.select(new_term, f"{object} & chain {chain} & resi \\{resv} & name {atom_selection_name}")
+    _self.select(new_term, f"{object} & {_chain_sel(chain)} & resi \\{resv} & name {atom_selection_name}")
     #_self.edit(new_term)
 
 def fab(input,name=None,mode='peptide',resi=1,chain='',segi='',state=-1,

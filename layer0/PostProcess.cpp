@@ -46,7 +46,7 @@ void PostProcess::bindFBORBO(std::size_t idx)
   }
 }
 
-const renderTarget_t::shape_type PostProcess::size(std::size_t idx) const
+const RenderTargetGL::shape_type PostProcess::size(std::size_t idx) const
     noexcept
 {
   return m_renderTargets[idx]->size();
@@ -55,14 +55,14 @@ const renderTarget_t::shape_type PostProcess::size(std::size_t idx) const
 #ifndef _PYMOL_NO_AA_SHADERS
 #endif
 
-OIT_PostProcess::OIT_PostProcess(int width, int height, renderBuffer_t* rbo)
+OIT_PostProcess::OIT_PostProcess(int width, int height, RenderbufferGL* rbo)
 {
   if (TM3_IS_ONEBUF) {
-    auto rt0 = std::make_unique<renderTarget_t>(width, height);
+    auto rt0 = std::make_unique<RenderTargetGL>(width, height);
     rt0->layout({{4, rt_layout_t::FLOAT}}, rbo);
     m_renderTargets.push_back(std::move(rt0));
 
-    auto rt1 = std::make_unique<renderTarget_t>(width, height);
+    auto rt1 = std::make_unique<RenderTargetGL>(width, height);
     rt1->layout({{1, rt_layout_t::FLOAT}}, rt0->rbo());
     m_renderTargets.push_back(std::move(rt1));
   } else {
@@ -74,7 +74,7 @@ OIT_PostProcess::OIT_PostProcess(int width, int height, renderBuffer_t* rbo)
       layouts.emplace_back(2, rt_layout_t::FLOAT);
     }
 
-    auto rt0 = std::make_unique<renderTarget_t>(width, height);
+    auto rt0 = std::make_unique<RenderTargetGL>(width, height);
     rt0->layout(std::move(layouts), rbo);
     m_renderTargets.push_back(std::move(rt0));
   }

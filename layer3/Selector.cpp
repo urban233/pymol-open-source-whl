@@ -54,10 +54,11 @@ Z* -------------------------------------------------------------------
 #include"OVLexicon.h"
 #include"Parse.h"
 
+#include "P.h"
 #include"ListMacros.h"
+#include "Util2.h"
 
-#ifdef _PYMOL_IP_PROPERTIES
-#endif
+#include "Property.h"
 
 #include "pymol/zstring_view.h"
 
@@ -410,6 +411,7 @@ static int SelectorGetObjAtmOffset(
 #define SELE_LABs ( 0x5500 | STYP_SEL1 | 0x80 )
 #define SELE_PROz ( 0x5600 | STYP_SEL0 | 0x90 )
 #define SELE_NUCz ( 0x5700 | STYP_SEL0 | 0x90 )
+#define SELE_DESz ( 0x5800 | STYP_SEL0 | 0x90 )
 
 #define SEL_PREMAX 0x8
 
@@ -604,6 +606,9 @@ static WordKeyValue Keyword[] = {
   {"acceptors", SELE_ACCz},
   {"acc.", SELE_ACCz},
 
+  {"delocalized", SELE_DESz},
+  {"deloc.", SELE_DESz},
+
   {"pepseq", SELE_PEPs},
   {"ps.", SELE_PEPs},
 
@@ -686,13 +691,18 @@ static WordKeyValue Keyword[] = {
 #define SCMP_LTHN 0x02
 #define SCMP_RANG 0x03
 #define SCMP_EQAL 0x04
+#define SCMP_GEQL 0x05
+#define SCMP_LEQL 0x06
 
 static WordKeyValue AtOper[] = {
   {">", SCMP_GTHN},
   {"<", SCMP_LTHN},
   {"in", SCMP_RANG},
   {"=", SCMP_EQAL},
-  {"", 0}
+  {"==", SCMP_EQAL},
+  {">=", SCMP_GEQL},
+  {"<=", SCMP_LEQL},
+  {"", 0},
 };
 
 static short fcmp(float a, float b, int oper) {
@@ -703,6 +713,10 @@ static short fcmp(float a, float b, int oper) {
     return (a < b);
   case SCMP_EQAL:
     return fabs(a - b) < R_SMALL4;
+  case SCMP_GEQL:
+    return (a >= b);
+  case SCMP_LEQL:
+    return (a <= b);
   }
   printf("ERROR: invalid operator %d\n", oper);
   return false;
@@ -914,7 +928,7 @@ int SelectorResidueVLAsTo3DMatchScores(PyMOLGlobals * G, CMatch * match,
         }
       }
       {
-        std::unique_ptr<MapType> map(MapNew(G, radius, v_ca, n, nullptr));
+        std::unique_ptr<MapType> map(new MapType(G, radius, v_ca, n, nullptr));
         if(!pass) {
           inter = inter1;
         } else {
@@ -1114,7 +1128,8 @@ int SelectorClassifyAtoms(PyMOLGlobals * G, int sele, int preserve,
       mask = 0;
       if(!ai->hetatm && AtomInfoKnownProteinResName(LexStr(G, ai->resn)))
         mask = cAtomFlag_polymer | cAtomFlag_protein;
-      else if(!ai->hetatm && AtomInfoKnownNucleicResName(LexStr(G, ai->resn)))
+      else if((!ai->hetatm || AtomInfoKnownPNAResName(LexStr(G, ai->resn)))
+              && AtomInfoKnownNucleicResName(LexStr(G, ai->resn)))
         mask = cAtomFlag_polymer | cAtomFlag_nucleic;
       else if(AtomInfoKnownWaterResName(G, LexStr(G, ai->resn)))
         mask = cAtomFlag_solvent;
@@ -1307,6 +1322,7 @@ int SelectorClassifyAtoms(PyMOLGlobals * G, int sele, int preserve,
       }
 
       if((mask & cAtomFlag_polymer)) {
+        AtomInfoType *guide_atom_c3 = nullptr;
         ai0 = obj->AtomInfo + I->Table[a0].atom;
         for(aa = a0; !guide_atom && aa <= a1; aa++) {
           if(ai0->protons == cAN_C) {
@@ -1329,10 +1345,23 @@ int SelectorClassifyAtoms(PyMOLGlobals * G, int sele, int preserve,
                   break;
                 }
                 break;
+              case '3':
+                if((mask & cAtomFlag_nucleic) && !guide_atom_c3) {
+                  switch (name[2]) {      /* C3' as fallback guide for nucleic acids without C4' (PNA) */
+                  case '*':
+                  case '\'':
+                    guide_atom_c3 = ai0;
+                    break;
+                  }
+                }
+                break;
               }
             }
           }
           ai0++;
+        }
+        if (!guide_atom && guide_atom_c3) {
+          guide_atom = guide_atom_c3;
         }
       }
 
@@ -1404,7 +1433,7 @@ MapType *SelectorGetSpacialMapFromSeleCoord(PyMOLGlobals * G, int sele, int stat
           }
         }
         if(nc) {
-          result = MapNew(G, cutoff, coord, nc, nullptr);
+          result = new MapType(G, cutoff, coord, nc, nullptr);
         }
       }
     }
@@ -1943,7 +1972,7 @@ int SelectorAssignSS(PyMOLGlobals * G, int target, int present,
 
       if(n1) {
         short too_many_atoms = false;
-        std::unique_ptr<MapType> map(MapNewFlagged(G, -cutoff,
+        std::unique_ptr<MapType> map(new MapType(G, -cutoff,
             pymol::flatten(coords), table_size, nullptr, Flag1.data()));
         if(map) {
 
@@ -3892,7 +3921,7 @@ pymol::Result<std::pair<ObjectMolecule*, int>> SelectorGetSingleAtomObjectIndex(
       int s = (ai++)->selEntry;
       if(SelectorIsMember(G, s, sele)) {
         if(found_it) {
-          return pymol::Error("More than one atom found");         /* ADD'L EXIT POINT */
+          return pymol::make_error("More than one atom found");         /* ADD'L EXIT POINT */
         } else {
           result = std::make_pair(obj, a);
           found_it = true;
@@ -3903,7 +3932,7 @@ pymol::Result<std::pair<ObjectMolecule*, int>> SelectorGetSingleAtomObjectIndex(
   if(found_it) {
     return result;
   } else {
-    return pymol::Error("Not found");
+    return pymol::make_error("Not found");
   }
 }
 
@@ -3920,7 +3949,7 @@ pymol::Result<std::array<float, 3>> SelectorGetSingleAtomVertex(PyMOLGlobals * G
     if(found_it) {
       return v;
     } else {
-      return pymol::Error("Invalid Atom");
+      return pymol::make_error("Invalid Atom");
     }
   }
 }
@@ -4697,7 +4726,7 @@ std::vector<int> SelectorGetInterstateVector(
     return {};
   }
 
-  std::unique_ptr<MapType> map(MapNewFlagged(
+  std::unique_ptr<MapType> map(new MapType(
       G, -cutoff, pymol::flatten(coords), table_size, nullptr, flags.data()));
 
   if (!map) {
@@ -4777,7 +4806,7 @@ int SelectorMapMaskVDW(PyMOLGlobals * G, int sele1, ObjectMapState * oMap, float
   /* now create and apply voxel map */
   c = 0;
   if(n1) {
-    std::unique_ptr<MapType> map(MapNewFlagged(G, -(buffer + MAX_VDW),
+    std::unique_ptr<MapType> map(new MapType(G, -(buffer + MAX_VDW),
         pymol::flatten(coords), table_size, nullptr, Flag1.data()));
     if(map) {
       for(a = oMap->Min[0]; a <= oMap->Max[0]; a++) {
@@ -5223,7 +5252,7 @@ int SelectorMapGaussian(PyMOLGlobals * G, int sele1, ObjectMapState * oMap,
   c = 0;
   if(n1) {
     n2 = 0;
-    std::unique_ptr<MapType> map(MapNew(G, -max_rcut, point, n1, nullptr));
+    std::unique_ptr<MapType> map(new MapType(G, -max_rcut, point, n1, nullptr));
     if(map) {
       sum = 0.0;
       sumsq = 0.0;
@@ -5466,7 +5495,7 @@ int SelectorMapCoulomb(PyMOLGlobals * G, int sele1, ObjectMapState * oMap,
       }
 
       std::unique_ptr<MapType> map(
-          MapNew(G, -(cutoff), point, n_point, nullptr));
+          new MapType(G, -(cutoff), point, n_point, nullptr));
       if(map) {
         float dx, dy, dz;
         float cut = cutoff;
@@ -5697,7 +5726,7 @@ PyObject *SelectorGetCoordsAsNumPy(PyMOLGlobals * G, int sele, int state)
 pymol::Result<> SelectorLoadCoords(PyMOLGlobals * G, PyObject * coords, int sele, int state)
 {
 #ifdef _PYMOL_NOPY
-  return pymol::Error("Python unavailable.");
+  return pymol::make_error("Python unavailable.");
 #else
 
   double matrix[16];
@@ -5711,7 +5740,7 @@ pymol::Result<> SelectorLoadCoords(PyMOLGlobals * G, PyObject * coords, int sele
   void * ptr;
 
   if(!PySequence_Check(coords)) {
-    return pymol::Error("Passed argument is not a sequence");
+    return pymol::make_error("Passed argument is not a sequence");
   }
 
   // atom count in selection
@@ -5720,7 +5749,7 @@ pymol::Result<> SelectorLoadCoords(PyMOLGlobals * G, PyObject * coords, int sele
 
   // sequence length must match atom count
   if(nAtom != PySequence_Size(coords)) {
-    return pymol::Error("Atom count mismatch");
+    return pymol::make_error("Atom count mismatch");
   }
 
   // detect numpy arrays, allows faster data access (see below)
@@ -5730,7 +5759,7 @@ pymol::Result<> SelectorLoadCoords(PyMOLGlobals * G, PyObject * coords, int sele
   if(PyArray_Check(coords)) {
     if(PyArray_NDIM((PyArrayObject *)coords) != 2 ||
         PyArray_DIM((PyArrayObject *)coords, 1) != 3) {
-      return pymol::Error("Numpy array shape mismatch");
+      return pymol::make_error("Numpy array shape mismatch");
     }
     itemsize = PyArray_ITEMSIZE((PyArrayObject *)coords);
     switch(itemsize) {
@@ -5779,7 +5808,7 @@ pymol::Result<> SelectorLoadCoords(PyMOLGlobals * G, PyObject * coords, int sele
     }
 
     if(PyErr_Occurred()) {
-      return pymol::Error("Load Coords error occurred.");
+      return pymol::make_error("Load Coords error occurred.");
     }
 
 
@@ -7293,7 +7322,7 @@ static int SelectorModulate1(PyMOLGlobals * G, EvalElem * base, int state)
             }
           }
           if(n1) {
-            std::unique_ptr<MapType> map(MapNewFlagged(G, -dist,
+            std::unique_ptr<MapType> map(new MapType(G, -dist,
                 pymol::flatten(coords), table_size, nullptr, Flag1.data()));
 	    CHECKOK(ok, map);
             if(ok) {
@@ -7393,7 +7422,7 @@ static int SelectorModulate1(PyMOLGlobals * G, EvalElem * base, int state)
             }
           }
           if(n1) {
-            std::unique_ptr<MapType> map(MapNewFlagged(G, -(dist + 2 * MAX_VDW),
+            std::unique_ptr<MapType> map(new MapType(G, -(dist + 2 * MAX_VDW),
                 Vertex.data(), I->Table.size(), nullptr, Flag1.data()));
 	    CHECKOK(ok, map);
             if(ok) {
@@ -7471,7 +7500,7 @@ static int SelectorSelect0(PyMOLGlobals * G, EvalElem * passed_base)
   case SELE_HBDs:
   case SELE_DONz:
   case SELE_ACCz:
-
+  case SELE_DESz:
     {
       /* first, verify chemistry for all atoms... */
       ObjectMolecule *lastObj = nullptr, *obj;
@@ -7494,7 +7523,14 @@ static int SelectorSelect0(PyMOLGlobals * G, EvalElem * passed_base)
       for(a = cNDummyAtoms; a < I->Table.size(); a++)
         base[0].sele[a] = I->Obj[I->Table[a].model]->AtomInfo[I->Table[a].atom].hb_donor;
       break;
-
+    case SELE_DESz:
+      for (a = cNDummyAtoms; a < I->Table.size(); a++) {
+        const auto* m = I->Obj[I->Table[a].model];
+        const auto at_i = I->Table[a].atom;
+        const auto deloc = (float) getExplicitDegree(m, at_i) / (float) getExplicitValence(m, at_i);
+        base[0].sele[a] = floor(deloc) != deloc;
+      }
+      break;
     }
     break;
   case SELE_NONz:
@@ -8430,230 +8466,117 @@ static int SelectorSelect2(PyMOLGlobals * G, EvalElem * base, int state)
   base->sele_calloc(I->Table.size());
   base->sele_err_chk_ptr(G);
   switch (base->code) {
-  case SELE_XVLx:
-  case SELE_YVLx:
-  case SELE_ZVLx:
-    oper = WordKey(G, AtOper, base[1].text(), 4, ignore_case, &exact);
-    switch (oper) {
-    case SCMP_GTHN:
-    case SCMP_LTHN:
-    case SCMP_EQAL:
-      if(sscanf(base[2].text(), "%f", &comp1) != 1)
-        ok = ErrMessage(G, "Selector", "Invalid Number");
-      break;
-    default:
-      ok = ErrMessage(G, "Selector", "Invalid Operator.");
-      break;
-    }
-    if(ok) {
-      ObjectMolecule *obj;
-      CoordSet *cs;
-      int at, idx, s, s0 = 0, sN = I->NCSet;
-
-      if (state != cStateAll) {
-        s0 = (state < cStateAll) ? SceneGetState(G) : state;
-        sN = s0 + 1;
-      }
-
-      for(a = cNDummyAtoms; a < I->Table.size(); a++)
-        base[0].sele[a] = false;
-
-      for(s = s0; s < sN; s++) {
-        for(a = cNDummyAtoms; a < I->Table.size(); a++) {
-          if(base[0].sele[a])
-            continue;
-
-          obj = I->Obj[I->Table[a].model];
-          if(s >= obj->NCSet)
-            continue;
-
-          at = I->Table[a].atom;
-          cs = obj->CSet[s];
-          idx = cs->atmToIdx(at);
-          if(idx < 0)
-            continue;
-
-          idx *= 3;
-          switch (base->code) {
-          case SELE_ZVLx:
-            idx++;
-          case SELE_YVLx:
-            idx++;
-          }
-
-          base[0].sele[a] = fcmp(cs->Coord[idx], comp1, oper);
-        }
-      }
-    }
-    break;
-  case SELE_PCHx:
-  case SELE_FCHx:
-  case SELE_BVLx:
-  case SELE_QVLx:
-    oper = WordKey(G, AtOper, base[1].text(), 4, ignore_case, &exact);
-    if(!oper)
-      ok = ErrMessage(G, "Selector", "Invalid Operator.");
-    if(ok) {
+    case SELE_XVLx:
+    case SELE_YVLx:
+    case SELE_ZVLx:
+      oper = WordKey(G, AtOper, base[1].text(), 4, ignore_case, &exact);
       switch (oper) {
       case SCMP_GTHN:
       case SCMP_LTHN:
       case SCMP_EQAL:
+      case SCMP_GEQL:
+      case SCMP_LEQL:
         if(sscanf(base[2].text(), "%f", &comp1) != 1)
           ok = ErrMessage(G, "Selector", "Invalid Number");
         break;
-      }
-      if(ok) {
-        switch (oper) {
-        case SCMP_GTHN:
-          switch (base->code) {
-          case SELE_BVLx:
-            for(a = cNDummyAtoms; a < I->Table.size(); a++) {
-              at1 = &I->Obj[I->Table[a].model]->AtomInfo[I->Table[a].atom];
-              if(at1->b > comp1) {
-                base[0].sele[a] = true;
-                c++;
-              } else {
-                base[0].sele[a] = false;
-              }
-            }
-            break;
-          case SELE_QVLx:
-            for(a = cNDummyAtoms; a < I->Table.size(); a++) {
-              at1 = &I->Obj[I->Table[a].model]->AtomInfo[I->Table[a].atom];
-              if(at1->q > comp1) {
-                base[0].sele[a] = true;
-                c++;
-              } else {
-                base[0].sele[a] = false;
-              }
-            }
-            break;
-          case SELE_PCHx:
-            for(a = cNDummyAtoms; a < I->Table.size(); a++) {
-              at1 = &I->Obj[I->Table[a].model]->AtomInfo[I->Table[a].atom];
-              if(at1->partialCharge > comp1) {
-                base[0].sele[a] = true;
-                c++;
-              } else {
-                base[0].sele[a] = false;
-              }
-            }
-            break;
-          case SELE_FCHx:
-            for(a = cNDummyAtoms; a < I->Table.size(); a++) {
-              at1 = &I->Obj[I->Table[a].model]->AtomInfo[I->Table[a].atom];
-              if(at1->formalCharge > comp1) {
-                base[0].sele[a] = true;
-                c++;
-              } else {
-                base[0].sele[a] = false;
-              }
-            }
-            break;
-          }
-          break;
-        case SCMP_LTHN:
-          switch (base->code) {
-          case SELE_BVLx:
-            for(a = cNDummyAtoms; a < I->Table.size(); a++) {
-              at1 = &I->Obj[I->Table[a].model]->AtomInfo[I->Table[a].atom];
-              if(at1->b < comp1) {
-                base[0].sele[a] = true;
-                c++;
-              } else {
-                base[0].sele[a] = false;
-              }
-            }
-            break;
-          case SELE_QVLx:
-            for(a = cNDummyAtoms; a < I->Table.size(); a++) {
-              at1 = &I->Obj[I->Table[a].model]->AtomInfo[I->Table[a].atom];
-              if(at1->q < comp1) {
-                base[0].sele[a] = true;
-                c++;
-              } else {
-                base[0].sele[a] = false;
-              }
-            }
-            break;
-          case SELE_PCHx:
-            for(a = cNDummyAtoms; a < I->Table.size(); a++) {
-              at1 = &I->Obj[I->Table[a].model]->AtomInfo[I->Table[a].atom];
-              if(at1->partialCharge < comp1) {
-                base[0].sele[a] = true;
-                c++;
-              } else {
-                base[0].sele[a] = false;
-              }
-            }
-            break;
-          case SELE_FCHx:
-            for(a = cNDummyAtoms; a < I->Table.size(); a++) {
-              at1 = &I->Obj[I->Table[a].model]->AtomInfo[I->Table[a].atom];
-              if(at1->formalCharge < comp1) {
-                base[0].sele[a] = true;
-                c++;
-              } else {
-                base[0].sele[a] = false;
-              }
-            }
-            break;
-          }
-          break;
-        case SCMP_EQAL:
-          switch (base->code) {
-          case SELE_BVLx:
-            for(a = cNDummyAtoms; a < I->Table.size(); a++) {
-              at1 = &I->Obj[I->Table[a].model]->AtomInfo[I->Table[a].atom];
-              if(fabs(at1->b - comp1) < R_SMALL4) {
-                base[0].sele[a] = true;
-                c++;
-              } else {
-                base[0].sele[a] = false;
-              }
-            }
-            break;
-          case SELE_QVLx:
-            for(a = cNDummyAtoms; a < I->Table.size(); a++) {
-              at1 = &I->Obj[I->Table[a].model]->AtomInfo[I->Table[a].atom];
-              if(fabs(at1->q - comp1) < R_SMALL4) {
-                base[0].sele[a] = true;
-                c++;
-              } else {
-                base[0].sele[a] = false;
-              }
-            }
-            break;
-          case SELE_PCHx:
-            for(a = cNDummyAtoms; a < I->Table.size(); a++) {
-              at1 = &I->Obj[I->Table[a].model]->AtomInfo[I->Table[a].atom];
-              if(fabs(at1->partialCharge - comp1) < R_SMALL4) {
-                base[0].sele[a] = true;
-                c++;
-              } else {
-                base[0].sele[a] = false;
-              }
-            }
-            break;
-          case SELE_FCHx:
-            for(a = cNDummyAtoms; a < I->Table.size(); a++) {
-              at1 = &I->Obj[I->Table[a].model]->AtomInfo[I->Table[a].atom];
-              if(fabs(at1->formalCharge - comp1) < R_SMALL4) {
-                base[0].sele[a] = true;
-                c++;
-              } else {
-                base[0].sele[a] = false;
-              }
-            }
-            break;
-          }
-          break;
-        }
+      default:
+        ok = ErrMessage(G, "Selector", "Invalid Operator.");
         break;
       }
-    }
-  }
 
+      if(ok) {
+        ObjectMolecule *obj;
+        CoordSet *cs;
+        int at, idx, s, s0 = 0, sN = I->NCSet;
+
+        if (state != cStateAll) {
+          s0 = (state < cStateAll) ? SceneGetState(G) : state;
+          sN = s0 + 1;
+        }
+
+        for(s = s0; s < sN; s++) {
+          for(a = cNDummyAtoms; a < I->Table.size(); a++) {
+            if(base[0].sele[a])
+              continue;
+
+            obj = I->Obj[I->Table[a].model];
+            if(s >= obj->NCSet)
+              continue;
+
+            at = I->Table[a].atom;
+            cs = obj->CSet[s];
+            idx = cs->atmToIdx(at);
+            if(idx < 0)
+              continue;
+
+            idx *= 3;
+            switch (base->code) {
+            case SELE_ZVLx:
+              idx++;
+            case SELE_YVLx:
+              idx++;
+            case SELE_XVLx:
+              break;
+            }
+
+            if (fcmp(cs->Coord[idx], comp1, oper)) {
+              base[0].sele[a] = true;
+            } else {
+              base[0].sele[a] = false;
+            }
+          }
+        }
+      }
+      break;
+    case SELE_PCHx:
+    case SELE_FCHx:
+    case SELE_BVLx:
+    case SELE_QVLx:
+      oper = WordKey(G, AtOper, base[1].text(), 4, ignore_case, &exact);
+      if(!oper) {
+        ok = ErrMessage(G, "Selector", "Invalid Operator.");
+        break;
+      }
+      switch (oper) {
+      case SCMP_GTHN:
+      case SCMP_LTHN:
+      case SCMP_EQAL:
+      case SCMP_GEQL:
+      case SCMP_LEQL:
+        if(sscanf(base[2].text(), "%f", &comp1) != 1)
+          ok = ErrMessage(G, "Selector", "Invalid Number");
+        break;
+      default:
+        ok = ErrMessage(G, "Selector", "Invalid Operator.");
+        break;
+      }
+    
+      if(ok) {
+        for(a = cNDummyAtoms; a < I->Table.size(); a++) {
+          at1 = I->Obj[I->Table[a].model]->AtomInfo + I->Table[a].atom;
+          float atomValue;
+          switch (base->code) {
+            case SELE_BVLx: atomValue = at1->b;          break;
+            case SELE_PCHx: atomValue = at1->partialCharge; break;
+            case SELE_FCHx: atomValue = at1->formalCharge;  break;
+            case SELE_QVLx: atomValue = at1->q;          break;
+            default: {
+              ErrMessage(G, "Selector", "Invalid Operand.");
+              return false;
+            }
+          }
+          
+          if(fcmp(atomValue, comp1, oper)) {
+            base[0].sele[a] = true;
+            c++;
+          } else {
+            base[0].sele[a] = false;
+          }
+        }
+      }
+      break;
+    }
+  
   PRINTFD(G, FB_Selector)
     " %s: %d atoms selected.\n", __func__, c ENDFD;
   return (ok);
@@ -8663,14 +8586,58 @@ static int SelectorSelect2(PyMOLGlobals * G, EvalElem * base, int state)
 static pymol::Result<> SelectorSelect3(
     PyMOLGlobals* G, EvalElem* base, int state)
 {
+  int a;
+  int oper;
+  float comp1, fval;
+  int exact;
+  AtomInfoType *at1;
+  CSelector *I = G->Selector;
+
+  base->type = STYP_LIST;
+  base->sele_calloc(I->Table.size());
+  base->sele_err_chk_ptr(G);
   switch (base->code) {
   case SELE_PROP:
-#ifndef _PYMOL_IP_PROPERTIES
-    return pymol::Error::make<pymol::Error::INCENTIVE_ONLY>(
-        "properties (p.) not supported in Open-Source PyMOL");
-#else
-    static_assert(false, "");
-#endif
+    oper = WordKey(G, AtOper, base[2].text(), 4, 0, &exact);
+    switch (oper) {
+    case SCMP_GTHN:
+    case SCMP_LTHN:
+    case SCMP_EQAL:
+      if(sscanf(base[3].text(), "%f", &comp1) != 1) {
+        return pymol::make_error("Invalid Number: ", base[3].text());
+      }
+      for(a = cNDummyAtoms; a < I->Table.size(); a++) {
+        at1 = I->Obj[I->Table[a].model]->AtomInfo + I->Table[a].atom;
+        if(at1->prop_id) {
+          fval = PropertyGetAsFloat(G, at1->prop_id, base[1].text());
+          base[0].sele[a] = fcmp(fval, comp1, oper);
+        }
+      }
+      break;
+    case SCMP_RANG:
+      {
+        char buffer[64];
+        CWordMatchOptions options;
+        CWordMatcher *matcher;
+        WordMatchOptionsConfigAlphaList(&options, '*', 0);
+        if(!(matcher = WordMatcherNew(G, base[3].text(), &options, true))) {
+          assert(false); // should never fail
+          return pymol::Error();
+        }
+        for(a = cNDummyAtoms; a < I->Table.size(); a++) {
+          at1 = I->Obj[I->Table[a].model]->AtomInfo + I->Table[a].atom;
+          if(at1->prop_id) {
+            auto sval = PropertyGetAsString(G, at1->prop_id, base[1].text(), buffer);
+            base[0].sele[a] = sval && WordMatcherMatchAlpha(matcher, sval);
+          }
+        }
+        WordMatcherFree(matcher);
+      }
+      break;
+    default:
+      return pymol::make_error("Invalid Operator: ", base[2].text());
+    }
+    break;
   default:
     assert(false);
   }
@@ -9135,7 +9102,7 @@ static int SelectorLogic1(PyMOLGlobals * G, EvalElem * inp_base, int state)
             }
           }
           if(n1) {
-            std::unique_ptr<MapType> map(MapNewFlagged(G, -1.1, Vertex.data(),
+            std::unique_ptr<MapType> map(new MapType(G, -1.1, Vertex.data(),
                 I->Table.size(), nullptr, Flag1.data()));
             if(map) {
               int e, nCSet;
@@ -9416,7 +9383,7 @@ int SelectorOperator22(PyMOLGlobals * G, EvalElem * base, int state)
             }
           }
           if(n1) {
-            std::unique_ptr<MapType> map(MapNewFlagged(G, -dist,
+            std::unique_ptr<MapType> map(new MapType(G, -dist,
                 pymol::flatten(coords), table_size, nullptr, Flag1.data()));
 	    CHECKOK(ok, map);
             if(ok) {
@@ -9966,15 +9933,15 @@ pymol::Result<sele_array_t> SelectorEvaluate(PyMOLGlobals* G,
   }
 
   if (!ok) {
-    return pymol::Error(indicate_last_token(word, c));
+    return pymol::make_error(indicate_last_token(word, c));
   }
 
   if (depth != 1) {
-    return pymol::Error("Malformed selection.");
+    return pymol::make_error("Malformed selection.");
   }
 
   if (Stack[depth].type != STYP_LIST) {
-    return pymol::Error("Invalid selection.");
+    return pymol::make_error("Invalid selection.");
   }
 
   return std::move(Stack[totDepth].sele); /* return the selection list */
@@ -10019,11 +9986,20 @@ std::vector<std::string> SelectorParse(PyMOLGlobals * G, const char *s)
         case '|':
         case '(':
         case ')':
+        case '%':
+          r.emplace_back(1, *p); /* add new word */
+          q = &r.back();
+          w_flag = false;
+          break;
         case '>':
         case '<':
         case '=':
-        case '%':
-          r.emplace_back(1, *p); /* add new word */
+          if (*(p+1) == '=') { /* handle >=, <=, == */
+            r.emplace_back(p, 2);
+            p++;
+          } else  {
+            r.emplace_back(1, *p);
+          }
           q = &r.back();
           w_flag = false;
           break;
@@ -10043,13 +10019,22 @@ std::vector<std::string> SelectorParse(PyMOLGlobals * G, const char *s)
       case '|':
       case '(':
       case ')':
-      case '>':
-      case '<':
-      case '=':
       case '%':
         r.emplace_back(1, *p); /* add new word */
         q = &r.back();
         break;
+      case '>':
+      case '<':
+      case '=':
+        if (*(p+1) == '=') { /* handle >=, <=, == */
+            r.emplace_back(p, 2);
+            p++;
+          } else  {
+            r.emplace_back(1, *p);
+          }
+          q = &r.back();
+          w_flag = false;
+          break;
       case ' ':
         break;
       case '"':
@@ -11074,6 +11059,37 @@ force compute
 attrib b < 0 
 
 */
+
+int SelectorSetAtomPropertyForSelection(PyMOLGlobals* G, int sele,
+    const char* propname, CPythonVal* value, const PropertyType& proptype,
+    int state, int quiet)
+{
+#ifdef _PYMOL_NOPY
+  return 0;
+#else
+
+  CSelector *I = G->Selector;
+  int nAtom = 0;
+  int ok = true;
+
+  SelectorUpdateTable(G, state, -1);
+
+  if(ok) {
+    int a;
+    for(a = cNDummyAtoms; a < I->Table.size(); a++) {
+      int at = I->Table[a].atom;
+      ObjectMolecule *obj = I->Obj[I->Table[a].model];
+      int s = obj->AtomInfo[at].selEntry;
+      I->Table[a].index = 0;
+      if(SelectorIsMember(G, s, sele)) {
+	nAtom++;
+	PropertySet(G, &obj->AtomInfo[at], propname, value, proptype);
+      }
+    }
+  }
+  return nAtom;
+#endif
+}
 
 bool SelectorSelectionExists(PyMOLGlobals* G, pymol::zstring_view sname)
 {

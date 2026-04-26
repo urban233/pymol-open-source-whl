@@ -143,6 +143,7 @@ class Indexed(Base):
         self.molecule = chempy.Molecule()
         self.atom = []
         self.bond = []
+        self.molecule_properties = []
 
 #------------------------------------------------------------------------------
     def get_min_max(self):

@@ -84,6 +84,12 @@ Z* -------------------------------------------------------------------
 #define CPythonVal_New_Integer(VAL)                     PyInt_FromLong(VAL)
 #define CPythonVal_New_Float(VAL)                       PyFloat_FromDouble(VAL)
 
+#define CPythonVal_PyFloat_AsDouble(PYOBJECT)            PyFloat_AsDouble(PYOBJECT)
+#define CPythonVal_PyString_Length(PYOBJECT)             PyString_Size(PYOBJECT)
+#define CPythonVal_PConvPyStrToStr                       PConvPyStrToStr
+#define CPythonVal_PConvPyBoolToInt                      PConvPyBoolToInt
+#define CPythonVal_PConvPyFloatToFloat                   PConvPyFloatToFloat
+#define CPythonVal_PConvPyFloatToDouble                  PConvPyFloatToDouble
 #define CPythonVal_IsNone(PYOBJECT)                     (PYOBJECT == Py_None)
 
 /* == error-checking routines: true = success, false = failure. */
@@ -113,6 +119,7 @@ int PConvPyStrToStrPtr(PyObject * obj, const char **ptr);
 #endif
 int PConvPyStrToLexRef(PyObject * obj, OVLexicon * lex, int *lex_ref);
 int PConvPyFloatToFloat(PyObject * obj, float *ptr);
+int PConvPyFloatToDouble(PyObject * obj, double *ptr);
 int PConvPyIntToChar(PyObject * obj, char *ptr);
 int PConvPyIntToInt(PyObject * obj, int *ptr);
 int PConvPyBoolToInt(PyObject * obj, int *ptr);

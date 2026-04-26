@@ -1,15 +1,22 @@
 import os
 import sys
-import pymol
-from pymol import cmd, testing, stored
+import socket
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
-pdbstr = '''ATOM      1  N   GLY    22      -1.195   0.201  -0.206  1.00  0.00           N  
-ATOM      2  CA  GLY    22       0.230   0.318  -0.502  1.00  0.00           C  
-ATOM      3  C   GLY    22       1.059  -0.390   0.542  1.00  0.00           C  
-ATOM      4  O   GLY    22       0.545  -0.975   1.499  1.00  0.00           O  
-ATOM      5  H   GLY    22      -1.558  -0.333   0.660  1.00  0.00           H  
-ATOM      6 3HA  GLY    22       0.482   1.337  -0.514  0.00  0.00           H  
-ATOM      7  HA  GLY    22       0.434  -0.159  -1.479  1.00  0.00           H  
+import requests
+
+import pymol
+from pymol import cmd, testing
+
+
+pdbstr = '''ATOM      1  N   GLY    22      -1.195   0.201  -0.206  1.00  0.00           N
+ATOM      2  CA  GLY    22       0.230   0.318  -0.502  1.00  0.00           C
+ATOM      3  C   GLY    22       1.059  -0.390   0.542  1.00  0.00           C
+ATOM      4  O   GLY    22       0.545  -0.975   1.499  1.00  0.00           O
+ATOM      5  H   GLY    22      -1.558  -0.333   0.660  1.00  0.00           H
+ATOM      6 3HA  GLY    22       0.482   1.337  -0.514  0.00  0.00           H
+ATOM      7  HA  GLY    22       0.434  -0.159  -1.479  1.00  0.00           H
 END
 '''
 
@@ -45,7 +52,6 @@ mmodstr = '''     7  gly
 
 
 def _get_free_port() -> int:
-    import socket
     with socket.socket() as s:
         s.bind(("", 0))
         return s.getsockname()[1]
@@ -608,43 +614,39 @@ class TestImporting(testing.PyMOLTestCase):
         'network'
     )  # doesn't use external network, but is very slow while being connected to VPN
     def testLoadPWG(self):
-        if sys.version_info[0] < 3:
-            import urllib2
-        else:
-            import urllib.request as urllib2
-
-        content_index = b'Hello World\n'
+        content_index = b"Hello World\n"
         port = _get_free_port()
-        baseurl = 'http://localhost:%d' % port
+        base_url = f"http://localhost:{port}"
 
-        def urlread(url):
-            handle = urllib2.urlopen(url, timeout=3.0)
-            try:
-                return handle.info(), handle.read()
-            finally:
-                handle.close()
+        with TemporaryDirectory() as root_dir:
+            root_dir = Path(root_dir)
+            index_file = root_dir / "index.html"
+            start_pwg_file = root_dir / "start.pwg"
 
-        with testing.mkdtemp() as rootdir:
-            filename = os.path.join(rootdir, 'index.html')
-            with open(filename, 'wb') as handle:
-                handle.write(content_index)
+            index_file.write_bytes(content_index)
 
-            filename = os.path.join(rootdir, 'start.pwg')
-            with open(filename, 'w') as handle:
-                handle.write('root %s\n' % rootdir)
-                handle.write('port %d\n' % port)
-                handle.write('header add Test-Key Test-Value\n') # new in 2.4
-            cmd.load(filename)
+            pwg_content = (
+                f"root {root_dir}\n"
+                f"port {port}\n"
+                "header add Test-Key Test-Value\n"
+            )
 
-            header, content = urlread(baseurl)
-            self.assertEqual(header['Test-Key'], 'Test-Value')
-            self.assertEqual(content, content_index)
+            start_pwg_file.write_text(pwg_content)
+            cmd.load(str(start_pwg_file))
+
+            response = requests.get(url=base_url, timeout=5)
+            response.raise_for_status()
+
+            self.assertEqual(response.headers["Test-Key"], "Test-Value")
+            self.assertEqual(response.content, content_index)
 
             # Warning: can't call locking functions here, will dead-lock
             # get_version is non-locking since 1.7.4
 
-            header, content = urlread(baseurl + '/apply/pymol.cmd.get_version')
-            content = content.decode('ascii', errors='ignore')
+            response = requests.get(f"{base_url}/apply/pymol.cmd.get_version", timeout=5)
+            response.raise_for_status()
+
+            content = response.content.decode("ascii", errors="ignore")
             self.assertTrue(content, cmd.get_version()[0] in content)
 
     @testing.requires_version('2.1')
@@ -710,3 +712,77 @@ class TestImporting(testing.PyMOLTestCase):
         with self.assertRaisesRegex(pymol.CmdException,
                                     'Parsing CIF file failed: truncated loop'):
             cmd.load_raw('data_foo loop_ _k.a _k.b 1 2 3', 'cif', 'm2')
+
+    def testLoad_cif_map(self):
+        filename = self.datafile("cif_map.cif")
+        cmd.load(filename, 'cif_map')
+        field = cmd.get_volume_field('cif_map')
+        self.assertEqual(field.shape, (12, 12, 12))
+
+    def testLoad_cif_map_density_values(self):
+        """Verify FFT-computed map matches analytical direct summation.
+
+        Computes rho(x,y,z) = (1/V) * sum_hkl F*exp(i*phi)*exp(-2*pi*i*(hx+ky+lz))
+        directly from the reflection data and compares with PyMOL's FFT output.
+        This catches axis inversions, wrong FFT direction, and scaling errors.
+        """
+        import numpy as np
+
+        # Disable normalization so we get raw density scaled by 1/V
+        cmd.set('normalize_ccp4_maps', 0)
+
+        filename = self.datafile("cif_map.cif")
+        cmd.load(filename, 'cif_map')
+        field = cmd.get_volume_field('cif_map')
+        Nx, Ny, Nz = field.shape
+
+        # Parse reflections from the CIF file using chempy.cif
+        from chempy.cif import parse_cif
+        reflections = []
+        with open(filename) as f:
+            for datablock in parse_cif(f.read()):
+                for loop in datablock.loops:
+                    try:
+                        ih = loop.get_col_idx('_refln.index_h')
+                        ik = loop.get_col_idx('_refln.index_k')
+                        il = loop.get_col_idx('_refln.index_l')
+                        ifwt = loop.get_col_idx('_refln.pdbx_fwt')
+                        iphwt = loop.get_col_idx('_refln.pdbx_phwt')
+                        ifom = loop.get_col_idx('_refln.fom')
+                    except KeyError:
+                        continue
+                    for row in loop.rows:
+                        h, k, l = int(row[ih]), int(row[ik]), int(row[il])
+                        fwt, phwt, fom = float(row[ifwt]), float(row[iphwt]), float(row[ifom])
+                        if fwt * fom > 0 or (h == 0 and k == 0 and l == 0):
+                            reflections.append((h, k, l, fwt * fom, np.radians(phwt)))
+
+        # Compute analytical density via direct summation at each grid point
+        # rho(x,y,z) = (1/V) * sum_hkl |F|*exp(i*phi) * exp(-2*pi*i*(hx+ky+lz))
+        V = 20.0 ** 3  # cell volume in A^3 (cubic 20A cell)
+        analytical = np.zeros((Nx, Ny, Nz))
+        for ix in range(Nx):
+            fx = ix / Nx  # fractional coordinate
+            for iy in range(Ny):
+                fy = iy / Ny
+                for iz in range(Nz):
+                    fz = iz / Nz
+                    rho = 0.0
+                    for (h, k, l, f_amp, ph_rad) in reflections:
+                        phase = ph_rad - 2.0 * np.pi * (h * fx + k * fy + l * fz)
+                        rho += f_amp * np.cos(phase)
+                    analytical[ix, iy, iz] = rho / V
+
+        # Verify density values match: field[i,j,k] == analytical[i,j,k]
+        # A perfect FFT should give correlation > 0.999
+        field_flat = field.flatten()
+        analytical_flat = analytical.flatten()
+        correlation = np.corrcoef(field_flat, analytical_flat)[0, 1]
+        self.assertGreater(correlation, 0.99,
+            f"Map-analytical correlation too low: {correlation:.4f}")
+
+        # Verify the peak is in the same location
+        pymol_peak = np.unravel_index(np.argmax(field), field.shape)
+        analytical_peak = np.unravel_index(np.argmax(analytical), analytical.shape)
+        self.assertEqual(pymol_peak, analytical_peak,
+            f"Peak location mismatch: PyMOL={pymol_peak} vs analytical={analytical_peak}")

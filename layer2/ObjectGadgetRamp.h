@@ -1,23 +1,23 @@
 
-/* 
+/*
 A* -------------------------------------------------------------------
 B* This file contains source code for the PyMOL computer program
-C* copyright 1998-2000 by Warren Lyford Delano of DeLano Scientific. 
+C* copyright 1998-2000 by Warren Lyford Delano of DeLano Scientific.
 D* -------------------------------------------------------------------
 E* It is unlawful to modify or remove this copyright notice.
 F* -------------------------------------------------------------------
-G* Please see the accompanying LICENSE file for further information. 
+G* Please see the accompanying LICENSE file for further information.
 H* -------------------------------------------------------------------
 I* Additional authors of this source file include:
--* 
--* 
+-*
+-*
 -*
 Z* -------------------------------------------------------------------
 */
 #ifndef _H_ObjectGadgetRamp
 #define _H_ObjectGadgetRamp
 
-#include"os_python.h"
+#include "os_python.h"
 
 #include "ObjectGadget.h"
 
@@ -45,8 +45,8 @@ struct ObjectGadgetRamp : public ObjectGadget {
   int CalcMode = 0;
 
   /* fields below are not saved in session */
-  ObjectMap *Map = nullptr;
-  ObjectMolecule *Mol = nullptr;
+  ObjectMap* Map = nullptr;
+  ObjectMolecule* Mol = nullptr;
 
   float border = 0.018f;
   float width = 0.9f;
@@ -75,29 +75,22 @@ struct ObjectGadgetRamp : public ObjectGadget {
 #define cRAMP_AFMHOT 7
 #define cRAMP_GRAYSCALE 8
 
-ObjectGadgetRamp *ObjectGadgetRampMapNewAsDefined(PyMOLGlobals * G,
-                                                  ObjectGadgetRamp *I,
-                                                  ObjectMap * map,
-                                                  pymol::vla<float>&& level_vla,
-                                                  pymol::vla<float>&& color_vla,
-                                                  int map_state, float *vert_vla,
-                                                  float beyond, float within, float sigma,
-                                                  int zero, int calc_mode);
+ObjectGadgetRamp* ObjectGadgetRampMapNewAsDefined(PyMOLGlobals* G,
+    ObjectGadgetRamp* I, ObjectMap* map, pymol::vla<float>&& level_vla,
+    pymol::vla<float>&& color_vla, int map_state, float* vert_vla, float beyond,
+    float within, float sigma, int zero, int calc_mode);
 
-ObjectGadgetRamp *ObjectGadgetRampMolNewAsDefined(PyMOLGlobals * G,
-                                                  ObjectGadgetRamp *I,
-                                                  ObjectMolecule * mol,
-                                                  pymol::vla<float>&& level_vla,
-                                                  pymol::vla<float>&& color_vla,
-                                                  int mol_state, int calc_mode);
+ObjectGadgetRamp* ObjectGadgetRampMolNewAsDefined(PyMOLGlobals* G,
+    ObjectGadgetRamp* I, ObjectMolecule* mol, pymol::vla<float>&& level_vla,
+    pymol::vla<float>&& color_vla, int mol_state, int calc_mode);
 
-int ObjectGadgetRampInterpolate(ObjectGadgetRamp * I, float level, float *color);
-int ObjectGadgetRampInterVertex(ObjectGadgetRamp * I, const float *pos, float *color,
-                                int state);
+int ObjectGadgetRampInterpolate(ObjectGadgetRamp* I, float level, float* color);
+int ObjectGadgetRampInterVertex(
+    ObjectGadgetRamp* I, const float* pos, float* color, int state);
 
-PyObject *ObjectGadgetRampAsPyList(ObjectGadgetRamp * I);
-int ObjectGadgetRampNewFromPyList(PyMOLGlobals * G, PyObject * list,
-				      ObjectGadgetRamp ** result, int version);
+PyObject* ObjectGadgetRampAsPyList(ObjectGadgetRamp* I);
+int ObjectGadgetRampNewFromPyList(
+    PyMOLGlobals* G, PyObject* list, ObjectGadgetRamp** result, int version);
 
-void ObjectGadgetRampFree(ObjectGadgetRamp * I);
+void ObjectGadgetRampFree(ObjectGadgetRamp* I);
 #endif

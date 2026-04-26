@@ -56,6 +56,16 @@ class TestEditing(testing.PyMOLTestCase):
         self.assertEqual([a.name for a in atoms], ['N', 'CA', 'C', 'O'])
         self.assertEqual([a.protons for a in atoms], [7, 6, 6, 8])
 
+    @testing.requires_version("3.1")
+    def testIterateDecorator(self):
+        cmd.fragment('gly')
+        atoms = []
+        @cmd.iterate('not hydro')
+        def real_iterate(at):
+            atoms.append(at)
+        self.assertEqual([a.name for a in atoms], ['N', 'CA', 'C', 'O'])
+        self.assertEqual([a.protons for a in atoms], [7, 6, 6, 8])
+
     @testing.requires_version("2.6")
     def testIterate__explicit_degree(self):
         cmd.fragment("ala")
@@ -511,6 +521,49 @@ class TestEditing(testing.PyMOLTestCase):
                  0.0, 1.0, 0.0, 0.0,
                  0.0, 0.0, 1.0, 0.0,
                  0.0, 0.0, 0.0, 1.0), 1e-4)
+
+    def test_matrix_copy_multi_target(self):
+        """matrix_copy with wildcard target must produce non-singular
+        state matrices for every target (regression test for pointer
+        aliasing bug when iterating over multiple targets)"""
+        import math
+        import numpy
+
+        # Source with a non-trivial state matrix (90deg X rotation)
+        cmd.fragment('ala', 'src')
+        cmd.transform_object('src', [
+            1, 0, 0, 0,
+            0, 0,-1, 0,
+            0, 1, 0, 0,
+            0, 0, 0, 1], homogenous=1)
+
+        # Targets with different non-trivial state matrices.
+        # transform_object records in cs->Matrix (unlike cmd.rotate
+        # which only modifies coordinates without setting the state matrix).
+        matrices = {
+            'tgt_a': [0,0,1,0, 0,1,0,0, -1,0,0,0, 0,0,0,1],
+            'tgt_b': [0,1,0,0, 1,0,0,0, 0,0,-1,0, 0,0,0,1],
+        }
+        c, s = math.cos(math.radians(120)), math.sin(math.radians(120))
+        matrices['tgt_c'] = [c,-s,0,0, s,c,0,0, 0,0,1,0, 0,0,0,1]
+
+        for name, mat in matrices.items():
+            cmd.fragment('ala', name)
+            cmd.transform_object(name, mat, homogenous=1)
+
+        # matrix_copy with wildcard - hits all three targets in one call
+        cmd.matrix_copy('src', 'tgt_*')
+
+        # Every target's state matrix must be non-singular (det ≈ ±1)
+        for name in matrices:
+            m = cmd.get_object_matrix(name, 1)
+            rot = numpy.array(m[:12]).reshape(3, 4)[:, :3]
+            det = numpy.linalg.det(rot)
+            svd = numpy.linalg.svd(rot, compute_uv=False)
+            self.assertAlmostEqual(abs(det), 1.0, 4,
+                f'{name}: state matrix singular (det={det})')
+            self.assertGreater(svd[-1], 0.5,
+                f'{name}: collapsed dimension (svd_min={svd[-1]})')
 
     def test_matrix_reset(self):
         # see test_matrix_copy

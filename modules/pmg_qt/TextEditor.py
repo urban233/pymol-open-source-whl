@@ -94,11 +94,11 @@ class TextEditor(QtWidgets.QMainWindow):
         QMessageBox = QtWidgets.QMessageBox
         if self._get() != self._savedcontent:
             ok = QMessageBox.question(None, "Save?", "Save changes?",
-                                      QMessageBox.Yes | QMessageBox.No |
-                                      QMessageBox.Cancel, QMessageBox.Yes)
-            if ok == QMessageBox.Yes:
+                                      QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No |
+                                      QMessageBox.StandardButton.Cancel, QMessageBox.StandardButton.Yes)
+            if ok == QMessageBox.StandardButton.Yes:
                 self.doSave()
-            elif ok == QMessageBox.Cancel:
+            elif ok == QMessageBox.StandardButton.Cancel:
                 return False
         return True
 
@@ -118,10 +118,10 @@ class TextEditor(QtWidgets.QMainWindow):
 
         menubar = self.root.menuBar()
         filemenu = menubar.addMenu("File")
-        filemenu.addAction("Open", self.doOpen, QtGui.QKeySequence("Ctrl+O"))
-        filemenu.addAction("Save", self.doSave, QtGui.QKeySequence("Ctrl+S"))
-        filemenu.addAction("Save as ...", self.doSaveAs,
-                           QtGui.QKeySequence("Ctrl+Shift+S"))
+        filemenu.addAction("Open", QtGui.QKeySequence("Ctrl+O"), self.doOpen)
+        filemenu.addAction("Save", QtGui.QKeySequence("Ctrl+S"), self.doSave)
+        filemenu.addAction("Save as ...", QtGui.QKeySequence("Ctrl+Shift+S"),
+                           self.doSaveAs)
 
         syntaxmenu = menubar.addMenu("Syntax")
         syntaxgroup = QtWidgets.QActionGroup(self)
@@ -176,7 +176,7 @@ def _edit_pymolrc(app, _list=()):
 
         pymolrc, ok = QtWidgets.QInputDialog.getText(
             None, 'Create new pymolrc?', 'Filename of new pymolrc',
-            QtWidgets.QLineEdit.Normal, pymolrc)
+            QtWidgets.QLineEdit.EchoMode.Normal, pymolrc)
 
         if not ok:
             return

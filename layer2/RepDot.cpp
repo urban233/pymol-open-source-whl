@@ -290,7 +290,7 @@ Rep *RepDotDoNew(CoordSet * cs, cRepDot_t mode, int state)
   }
 
   std::unique_ptr<MapType> map(
-      MapNew(G, MAX_VDW + solv_rad, cs->Coord, cs->NIndex, nullptr));
+      new MapType(G, MAX_VDW + solv_rad, cs->Coord, cs->NIndex, nullptr));
   if (!map) {
     return nullptr;
   }

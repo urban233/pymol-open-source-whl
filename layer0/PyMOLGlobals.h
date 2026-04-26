@@ -88,6 +88,7 @@ typedef struct _CType CType;
 typedef struct _CMain CMain;
 struct CPlugIOManager;
 struct COpenVR;
+struct CPropertyUnique;
 struct ObjectMolecule;
 
 class CShaderMgr;
@@ -97,30 +98,15 @@ class CMovieScenes;
 typedef struct _CP_inst CP_inst;
 #endif
 
-#ifndef OVLexicon_DEFINED
-typedef struct _OVLexicon OVLexicon;
-#define OVLexicon_DEFINED
-#endif
+struct OVLexicon;
 
-#ifndef CPyMOLOptions_DEFINED
-typedef struct _CPyMOLOptions CPyMOLOptions;
-#define CPyMOLOptions_DEFINED
-#endif
+struct CPyMOLOptions;
 
-#ifndef OVCONTEXT_DEFINED
 typedef struct _OVContext OVContext;
-#define OVCONTEXT_DEFINED
-#endif
 
-#ifndef CPyMOL_DEFINED
 struct CPyMOL;
-#define CPyMOL_DEFINED
-#endif
 
-#ifndef CGO_DEFINED
 class CGO;
-#define CGO_DEFINED
-#endif
 
 class GFXManager;
 
@@ -151,6 +137,7 @@ struct PyMOLGlobals {
   CSeq *Seq;
   CSetting *Setting, *Default;
   CSettingUnique *SettingUnique;
+  CPropertyUnique *PropertyUnique;
   CText *Text;
   CWizard *Wizard;
   CAtomInfo *AtomInfo;

@@ -39,6 +39,7 @@ Z* -------------------------------------------------------------------
 #include"CGO.h"
 #include"vla.h"
 #include"pymol/type_traits.h"
+#include "Util2.h"
 
 #define cWizBlank      0
 #define cWizTypeText   1

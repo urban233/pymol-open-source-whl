@@ -40,3 +40,13 @@ class TestPYMOL2727(testing.PyMOLTestCase):
 
         seq = self._get_seq('segi A')
         self.assertEqual(seq, 'VLSPADKTNHAGEYGAEALERMFLSFPTTKTYFPHFDLSHGSAQVKGHGKKVADALTNAVAHVDDMPNALSALSDLHAHKLRVDPVNFKLLSHCLLVTLAAHLPAEFTPAVHASLDKFLASVSTVLTSKYR')
+
+    @testing.requires_version('2.4')
+    def testMissingResInsScheme(self):
+        # With _pdbx_poly_seq_scheme, missing residues with insertion codes
+        # should be inserted correctly (GH #303)
+        cmd.set('cif_use_auth', 1)
+        cmd.load(self.datafile('1hbb_pdbx_seq_one_letter_code-ins-scheme.cif'), '1hbb')
+
+        seq = self._get_seq('segi A')
+        self.assertEqual(seq, 'VLSPADKTNVKAAWGKVGAHAGEYGAEALERMFLSFPTTKTYFPHFDLSHGSAQVKGHGKKVADALTNAVAHVDDMPNALSALSDLHAHKLRVDPVNFKLLSHCLLVTLAAHLPAEFTPAVHASLDKFLASVSTVLTSKYR')

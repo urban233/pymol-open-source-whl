@@ -1,7 +1,6 @@
 from pymol import cmd, testing
 
-@testing.requires_version('2.2')
-@testing.requires('properties')
+@testing.requires('incentive')
 class TestMaePropertiesIO(testing.PyMOLTestCase):
     def test(self):
         cmd.fragment('gly')
@@ -45,7 +44,6 @@ class TestMaePropertiesIO(testing.PyMOLTestCase):
         for (key, value) in objprops:
             self.assertEqual(cmd.get_property('s_pymol_' + key, 'm1'), value)
 
-    @testing.requires_version('2.3.1')
     def test_undefined(self):
         cmd.fragment('gly')
         cmd.alter('name C', 'p["s_p_foo"] = "bar"')

@@ -66,6 +66,7 @@ def _iterate_prepare_args(expression, space, _self):
 if True:
 
     import math
+    from functools import partial
     from . import selector
     cmd = __import__("sys").modules["pymol.cmd"]
     from .cmd import _cmd,lock,unlock,is_string, \
@@ -1254,6 +1255,288 @@ SEE ALSO
         return r
 
 
+    # Textbook pKa values for standard titratable residues.
+    # Used as fallback when pdb2pqr is not available.
+    # At a given pH, if pH > pKa the group is deprotonated (fewer H).
+    # Format: (resn, atom_names) → pKa
+    # H count when protonated vs deprotonated is specified per entry.
+    _TITRATABLE_PKA = {
+        # Carboxylates: protonated = 1H on OD2/OE2, deprotonated = 0H
+        ('ASP', ('OD1', 'OD2')): 3.65,
+        ('GLU', ('OE1', 'OE2')): 4.25,
+        # Histidine: protonated = H on both ND1+NE2, deprotonated = H on NE2 only
+        # Note: assumes HIE tautomer. pdb2pqr path handles HID/HIE/HIP properly.
+        ('HIS', ('ND1',)):       6.00,
+        # Cysteine: protonated = 1H on SG, deprotonated = 0H
+        ('CYS', ('SG',)):        8.18,
+        # Tyrosine: protonated = 1H on OH, deprotonated = 0H
+        ('TYR', ('OH',)):       10.07,
+        # Lysine: protonated = 3H on NZ, deprotonated = 2H
+        ('LYS', ('NZ',)):       10.53,
+        # Arginine: practically always protonated
+        ('ARG', ('NH1', 'NH2')): 12.48,
+    }
+
+    def _force_add_h(obj_name, atom_sele, deficit, state, _self):
+        """Temporarily bump valence to force h_add on a saturated atom."""
+        _self.alter(atom_sele, f"valence = valence + {deficit}")
+        try:
+            _self.h_add(atom_sele, state=state)
+        finally:
+            _self.alter(atom_sele, f"valence = valence - {deficit}")
+
+    def _remove_excess_h(obj_name, h_sele, excess, _self):
+        """Remove a specific number of H atoms from a selection."""
+        from pymol import stored
+        stored._prot_ids = []
+        _self.iterate(h_sele, "stored._prot_ids.append(ID)")
+        for aid in stored._prot_ids[-excess:]:
+            _self.remove(f"{obj_name} and ID {aid}")
+
+    def _protonate_fallback(selection, obj_name, pH, state, quiet, _self):
+        """pH-aware protonation using textbook pKa values.
+
+        Adds all H via h_add, then adjusts titratable groups based on
+        whether pH > pKa (deprotonated) or pH < pKa (protonated).
+        """
+        from pymol import stored
+
+        obj_sele = f"({selection}) and {obj_name}"
+
+        # Strip existing H and add all H geometrically
+        _self.remove(f"hydro and (bymol ({obj_sele}))")
+        _self.h_add(obj_sele, state=state)
+
+        # Adjust titratable groups
+        for (resn, atom_names), pKa in _TITRATABLE_PKA.items():
+            deprotonated = pH > pKa
+
+            if not deprotonated:
+                # Group should be protonated. h_add may not have added
+                # H if the valence is already satisfied (e.g. carboxylate
+                # double bond, His imidazole). Bump valence to force it.
+                for atom_name in atom_names:
+                    sele = f"{obj_name} and resn {resn} and name {atom_name}"
+                    stored._prot_ids = []
+                    _self.iterate(sele, "stored._prot_ids.append(ID)")
+                    for aid in stored._prot_ids:
+                        atom_sele = f"{obj_name} and ID {aid}"
+                        h_count = _self.count_atoms(
+                            f"hydro and neighbor ({atom_sele})")
+                        if h_count == 0:
+                            _force_add_h(obj_name, atom_sele, 1, state,
+                                         _self)
+                continue
+
+            # pH > pKa: group should be deprotonated — remove H
+            for atom_name in atom_names:
+                h_sele = (f"hydro and neighbor "
+                          f"({obj_name} and resn {resn} and name {atom_name})")
+                h_count = _self.count_atoms(h_sele)
+                if h_count > 0:
+                    if resn == 'LYS' and atom_name == 'NZ':
+                        # Deprotonated Lys: NH2 (2H), not NH3+ (3H)
+                        _remove_excess_h(obj_name, h_sele, 1, _self)
+                    else:
+                        _self.remove(h_sele)
+
+        if not quiet:
+            total_h = _self.count_atoms(f"hydro and (bymol ({obj_sele}))")
+            print(f" protonate: added {total_h} hydrogens at pH {pH:.1f}"
+                  " (using textbook pKa values)")
+
+    def _protonate_pdb2pqr(selection, obj_name, pH, ff, state, quiet,
+                           exe, is_v3, _self):
+        """pH-aware protonation using pdb2pqr/PROPKA."""
+        import os
+        import shutil
+        import subprocess
+        import tempfile
+        from pymol import stored
+
+        obj_sele = f"({selection}) and {obj_name}"
+
+        tmpdir = tempfile.mkdtemp()
+        try:
+            infile = os.path.join(tmpdir, 'in.pdb')
+            outfile = os.path.join(tmpdir, 'out.pqr')
+            tmp_obj = _self.get_unused_name('_prot_tmp')
+
+            _self.save(infile, obj_name, state)
+
+            chain_flag = '--keep-chain' if is_v3 else '--chain'
+            args = [exe,
+                    f'--ff={ff.upper()}',
+                    chain_flag,
+                    '--titration-state-method=propka',
+                    f'--with-ph={pH:f}',
+                    infile, outfile]
+
+            p = subprocess.Popen(args, cwd=tmpdir,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE)
+            stdout, stderr = p.communicate()
+
+            if p.returncode != 0:
+                if not quiet:
+                    print(stderr.decode('utf-8', errors='replace'))
+                raise pymol.CmdException(
+                    f'pdb2pqr failed (exit {p.returncode})')
+
+            if not quiet and stdout:
+                print(stdout.decode('utf-8', errors='replace'))
+
+            _self.load(outfile, tmp_obj, quiet=1)
+
+            # Build H-count map from pdb2pqr output using selections
+            # Key: (chain, resi, resn, name) → target H count
+            stored._prot_hcount = {}
+            stored._prot_keys = []
+            _self.iterate(
+                f"{tmp_obj} and not hydro",
+                "k = (chain, resi, resn, name);"
+                "stored._prot_keys.append(k);"
+                "stored._prot_hcount[k] = 0")
+
+            for chain, resi, resn, name in stored._prot_keys:
+                heavy_sele = (
+                    f'({tmp_obj} and chain "{chain}" and '
+                    f'resi {resi} and name {name})')
+                h_count = _self.count_atoms(
+                    f"hydro and neighbor ({heavy_sele})")
+                if h_count > 0:
+                    stored._prot_hcount[
+                        (chain, resi, resn, name)] = h_count
+
+            # Strip existing H and add all H geometrically
+            _self.remove(f"hydro and (bymol ({obj_sele}))")
+            _self.h_add(obj_sele, state=state)
+
+            # Compare and adjust H counts per heavy atom
+            for key, target_h in stored._prot_hcount.items():
+                chain, resi, resn, name = key
+                heavy_sele = (
+                    f'({obj_name} and chain "{chain}" and '
+                    f'resi {resi} and name {name})')
+                if _self.count_atoms(heavy_sele) == 0:
+                    continue
+                h_sele = f"hydro and neighbor ({heavy_sele})"
+                current_h = _self.count_atoms(h_sele)
+
+                if current_h > target_h:
+                    excess = current_h - target_h
+                    _remove_excess_h(obj_name, h_sele, excess, _self)
+                elif current_h < target_h:
+                    deficit = target_h - current_h
+                    _force_add_h(obj_name, heavy_sele, deficit, state,
+                                 _self)
+
+            _self.delete(tmp_obj)
+
+            if not quiet:
+                total_h = _self.count_atoms(
+                    f"hydro and (bymol ({obj_sele}))")
+                print(f" protonate: added {total_h} hydrogens at pH {pH:.1f}")
+
+        finally:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+    def protonate(selection="all", pH=7.4, ff="amber", state=0,
+                  quiet=1, _self=cmd):
+        '''
+DESCRIPTION
+
+    "protonate" adds hydrogens with pH-dependent protonation states.
+    When pdb2pqr is available, uses PROPKA for per-residue pKa prediction.
+    Otherwise, falls back to textbook pKa values for standard titratable
+    residues.
+
+    Unlike "h_add" which fills all open valences, "protonate" considers
+    pKa values to determine which atoms should be protonated at the
+    given pH.
+
+    Heavy atoms and their visual settings (colors, representations) are
+    preserved. Only hydrogens are modified.
+
+USAGE
+
+    protonate [ selection [, pH [, ff [, state [, quiet ]]]]]
+
+ARGUMENTS
+
+    selection = string {default: all}
+
+    pH = float: target pH for protonation {default: 7.4}
+
+    ff = string: pdb2pqr forcefield (amber, charmm, parse, etc.) {default: amber}
+
+    state = int {default: 0 (all states)}
+
+    quiet = int {default: 1}
+
+NOTES
+
+    When pdb2pqr is installed (included with PyMOL bundle), PROPKA is
+    used for accurate per-residue pKa prediction that accounts for the
+    protein microenvironment.
+
+    Without pdb2pqr, textbook pKa values are used:
+      Asp 3.65, Glu 4.25, His 6.00, Cys 8.18,
+      Tyr 10.07, Lys 10.53, Arg 12.48
+
+    At biological pH (7.4):
+      - Asp/Glu carboxylates are deprotonated (COO-)
+      - Lys amines are protonated (NH3+)
+      - His imidazole is deprotonated
+
+SEE ALSO
+
+    h_add, h_fill
+        '''
+        import shutil
+        import subprocess
+        from . import selector
+
+        pH = float(pH)
+        if not (0.0 <= pH <= 14.0):
+            raise pymol.CmdException(
+                f"pH value {pH} out of range (0-14)")
+        state = int(state)
+        quiet = int(quiet)
+
+        selection = selector.process(selection)
+
+        obj_names = _self.get_object_list(selection)
+        if not obj_names:
+            raise pymol.CmdException("No objects in selection")
+
+        # Find pdb2pqr executable
+        exe = (shutil.which('pdb2pqr') or
+               shutil.which('pdb2pqr30') or
+               shutil.which('pdb2pqr_cli'))
+
+        is_v3 = True
+        if exe:
+            try:
+                p = subprocess.Popen([exe, '--version'],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                ver_out, _ = p.communicate()
+                ver_str = ver_out.decode('utf-8', errors='replace').strip()
+                is_v3 = ver_str.split()[-1].startswith('3')
+            except (subprocess.SubprocessError, OSError, ValueError):
+                pass
+
+        for obj_name in obj_names:
+            if exe:
+                _protonate_pdb2pqr(selection, obj_name, pH, ff, state,
+                                   quiet, exe, is_v3, _self=_self)
+            else:
+                if not quiet:
+                    print(" protonate: pdb2pqr not found, using "
+                          "textbook pKa values")
+                _protonate_fallback(selection, obj_name, pH, state,
+                                    quiet, _self=_self)
+
 
     def sort(object="",_self=cmd):
         '''
@@ -1487,8 +1770,7 @@ DESCRIPTION
             return _cmd.alter_list(_self._COb, object, list(expr_list),
                                    int(quiet), dict(space))
 
-
-    def iterate(selection, expression, quiet=1, space=None, _self=cmd):
+    def iterate(selection, expression=None, quiet=1, space=None, _self=cmd):
 
         '''
 DESCRIPTION
@@ -1524,6 +1806,9 @@ SEE ALSO
 
     iterate_state, alter, alter_state
         '''
+        if expression is None:
+            return partial(iterate, selection, quiet=quiet, space=space, _self=_self)
+
         expression, space = _iterate_prepare_args(expression, space, _self)
 
         # preprocess selection

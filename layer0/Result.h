@@ -1,87 +1,13 @@
 #pragma once
 
-#include "Util2.h"
-#include <string>
-#include <type_traits>
+#include "Error.h"
+
+#include <cassert>
 
 namespace pymol
 {
 struct Void {
 };
-
-/**
- * Expressive error handling alternative
- */
-class Error
-{
-public:
-  enum Code {
-    DEFAULT,
-    QUIET,
-    MEMORY,
-    INCENTIVE_ONLY,
-  };
-
-  Error() {}
-
-  /**
-   * Construct from string
-   */
-  explicit Error(std::string s)
-      : m_errMsg(std::move(s))
-  {
-  }
-
-  /**
-   * Construct from error code.
-   */
-  explicit Error(Code code)
-      : m_code(code)
-  {
-  }
-
-  /**
-   * Retrieves error message
-   * @return error message
-   */
-
-  const std::string& what() const noexcept { return m_errMsg; }
-
-  /**
-   * Error code
-   */
-  Code code() const noexcept { return m_code; }
-
-  /**
-   * Make an error instance with error code.
-   */
-  template <Code C, typename... PrintableTs>
-  static Error make(PrintableTs&&... ts)
-  {
-    auto error = Error(join_to_string(std::forward<PrintableTs>(ts)...));
-    error.m_code = C;
-    return error;
-  }
-
-private:
-  std::string m_errMsg;
-  Code m_code = DEFAULT;
-};
-
-/**
- * Creates Error message
- * @param ts collection of printable values to be joined
- * into an error message
- */
-template<typename... PrintableTs>
-Error make_error(PrintableTs&&... ts)
-{
-  return Error(join_to_string(std::forward<PrintableTs>(ts)...));
-}
-
-/**
- * Class that expresses the expected result of a function
- */
 
 template <typename ResultT=Void> class Result
 {
@@ -92,10 +18,9 @@ public:
   Result() = default;
 
   /**
-   * Constructor alternative that allows for convertible types
-   * param r result returned from function with a type convertible to ResultT
+   * @brief Constructor alternative that allows for convertible types
+   * @param r result returned from function with a type convertible to ResultT
    */
-
   Result(type r) : m_result(std::move(r)) {}
 
   /**
@@ -103,11 +28,10 @@ public:
    * should not be taken at this point.
    * @param e error object to express why value should not be used
    */
-
   Result(Error e) : m_error{std::move(e)}, m_valid{false} {}
 
   /**
-   * Construct from error code.
+   * @brief Construct from error code.
    */
   Result(Error::Code code)
       : m_error(code)
@@ -116,19 +40,19 @@ public:
   }
 
   /**
-   * Determines whether the value of the expected type can be used.
+   * @brief Determines whether the value of the expected type can be used.
+   * @return true if the value can be used, false if an error occurred
    */
-
   explicit operator bool() const noexcept { return m_valid; }
 
   /**
-   * Retrieves the underlying error object
+   * @brief Retrieves the underlying error object
+   * @return The underlying error object
    */
-
   const Error& error() const noexcept { return m_error; }
 
   /**
-   * Rvalue reference to the underlying error object
+   * @return Rvalue reference to the underlying error object
    */
   Error&& error_move() noexcept
   {
@@ -137,19 +61,17 @@ public:
   }
 
   /**
-   * Retrieves the value of the expected object
+   * @result the value of the expected object
    */
-
   ResultT& result() { return m_result; }
 
   /**
-   * Retrieves the value of the expected object
+   * @return the value of the expected object
    */
-
   const ResultT& result() const { return m_result; }
 
   /**
-   * Pointer to the expected object. Never nullptr. Call is invalid if this
+   * @return pointer to the expected object. Never nullptr. Call is invalid if this
    * instance is in error state.
    */
   ResultT* operator->()
@@ -159,7 +81,7 @@ public:
   }
 
   /**
-   * Reference to the expected object. Behavior is undefined if this
+   * @return Reference to the expected object. Behavior is undefined if this
    * instance is in error state.
    */
   ResultT& operator*() &
@@ -168,6 +90,10 @@ public:
     return m_result;
   }
 
+  /**
+   * @return Rvalue reference to the expected object. Behavior is undefined if this
+   * instance is in error state.
+   */
   ResultT&& operator*() &&
   {
     assert(m_valid);
@@ -175,7 +101,7 @@ public:
   }
 
   /**
-   * Const reference to the expected object. Behavior is undefined if this
+   * @return Const reference to the expected object. Behavior is undefined if this
    * instance is in error state.
    */
   const ResultT& operator*() const &
@@ -184,6 +110,10 @@ public:
     return m_result;
   }
 
+  /**
+   * @return Const rvalue reference to the expected object. Behavior is undefined if this
+   * instance is in error state.
+   */
   const ResultT&& operator*() const &&
   {
     assert(m_valid);

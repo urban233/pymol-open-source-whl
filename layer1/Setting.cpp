@@ -43,6 +43,7 @@ Z* -------------------------------------------------------------------
 #include"Selector.h"
 #include"Parse.h"
 #include "Feedback.h"
+#include "Util2.h"
 
 #ifdef _PYMOL_OPENVR
 #include"OpenVRMode.h"
@@ -1927,6 +1928,7 @@ void SettingGenerateSideEffects(PyMOLGlobals * G, int index, const char *sele, i
     ExecutiveUpdateSceneMembers(G);
   case cSetting_grid_slot:
     ExecutiveInvalidateGroups(G, false);
+    ExecutiveUpdateSceneMembers(G);
     SceneChanged(G);
     break;
   case cSetting_grid_max:
@@ -2925,8 +2927,6 @@ void SettingGenerateSideEffects(PyMOLGlobals * G, int index, const char *sele, i
   case cSetting_antialias_shader:
   case cSetting_atom_type_format:
   case cSetting_colored_feedback:
-  case cSetting_load_atom_props_default:
-  case cSetting_load_object_props_default:
   case cSetting_suspend_undo:
   case cSetting_volume_mode:
     PRINTFB(G, FB_Setting, FB_Warnings)

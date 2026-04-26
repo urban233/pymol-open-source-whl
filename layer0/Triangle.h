@@ -21,9 +21,11 @@ Z* -------------------------------------------------------------------
 #include"Vector.h"
 #include"PyMOLGlobals.h"
 
-int *TrianglePointsToSurface(PyMOLGlobals * G, float *v, float *vn, int n,
-                             float cutoff, int *nTriPtr, int **stripPtr, float *extent,
-                             int cavity_mode);
+#include <vector>
+
+std::vector<int> TrianglePointsToSurface(PyMOLGlobals* G, float* v, float* vn,
+    int n, float cutoff, int* nTriPtr, std::vector<int>& stripPtr, float* extent,
+    int cavity_mode);
 
 int TriangleDegenerate(float *v1, float *n1, float *v2, float *n2, float *v3, float *n3);
 

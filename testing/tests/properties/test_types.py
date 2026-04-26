@@ -13,7 +13,6 @@ try:
 except ImportError:
     pass
 
-@testing.requires('properties')
 class TestProperties(testing.PyMOLTestCase):
     def testBooleanType(self):
         cmd.fragment('ala')

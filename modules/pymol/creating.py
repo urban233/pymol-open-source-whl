@@ -1013,8 +1013,6 @@ SEE ALSO
         target_state = int(target_state)
         if target_state == -1:
             target_state = _self.count_states('?' + name) + 1
-        if copy_properties:
-            print(' Warning: properties are not supported in Open-Source PyMOL')
         # preprocess selection
         selection = selector.process(selection)
 

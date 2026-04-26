@@ -219,6 +219,7 @@ from .editing import \
       pbc_unwrap, \
       pbc_wrap, \
       protect,            \
+      protonate,          \
       push_undo,          \
       rebond,             \
       reference,          \
@@ -302,7 +303,8 @@ from .fitting import \
       intra_rms,         \
       intra_rms_cur,     \
       cealign,          \
-      pair_fit
+      pair_fit,          \
+      usalign
 
 #--------------------------------------------------------------------
 # ARE ALL OF THESE UNUSED AND/OR DEPRECATED (?)
@@ -471,6 +473,13 @@ from .util import \
 
 from .stereochemistry import \
       assign_stereo
+
+from . import properties
+from .properties import \
+     get_property, \
+     get_property_list, \
+     set_property, \
+     set_atom_property
 
 #--------------------------------------------------------------------
 # Modules which contain programs used explicity as "module.xxx"

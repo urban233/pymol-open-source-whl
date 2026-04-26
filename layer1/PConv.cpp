@@ -291,6 +291,16 @@ int PConvPyIntToInt(PyObject * obj, int *ptr)
   return (ok);
 }
 
+int PConvPyBoolToInt(PyObject * obj, int *ptr)
+{
+  int ok = false;
+  if(obj && PyBool_Check(obj)) {
+    *ptr = PyInt_AsLong(obj);
+    ok = true;
+  }
+  return (ok);
+}
+
 int PConvPyFloatToFloat(PyObject * obj, float *ptr)
 {
   int ok = true;
@@ -300,6 +310,19 @@ int PConvPyFloatToFloat(PyObject * obj, float *ptr)
     ok = false;
   } else {
     *ptr = (float) PyFloat_AsDouble(obj);
+  }
+  return (ok);
+}
+
+int PConvPyFloatToDouble(PyObject * obj, double *ptr)
+{
+  int ok = true;
+  if(!obj) {
+    ok = false;
+  } else if(!PyFloat_Check(obj)) {
+    ok = false;
+  } else {
+    *ptr = PyFloat_AsDouble(obj);
   }
   return (ok);
 }

@@ -1,80 +1,80 @@
 
-/* 
+/*
 A* -------------------------------------------------------------------
 B* This file contains source code for the PyMOL computer program
-C* copyright 1998-2000 by Warren Lyford Delano of DeLano Scientific. 
+C* copyright 1998-2000 by Warren Lyford Delano of DeLano Scientific.
 D* -------------------------------------------------------------------
 E* It is unlawful to modify or remove this copyright notice.
 F* -------------------------------------------------------------------
-G* Please see the accompanying LICENSE file for further information. 
+G* Please see the accompanying LICENSE file for further information.
 H* -------------------------------------------------------------------
 I* Additional authors of this source file include:
--* 
--* 
+-*
+-*
 -*
 Z* -------------------------------------------------------------------
 */
-#include"os_python.h"
+#include "os_python.h"
 
-#include"os_predef.h"
-#include"os_std.h"
-#include"os_gl.h"
+#include "os_gl.h"
+#include "os_predef.h"
+#include "os_std.h"
 
-#include"Err.h"
-#include"ObjectCGO.h"
-#include"Base.h"
-#include"MemoryDebug.h"
-#include"CGO.h"
-#include"Scene.h"
-#include"Setting.h"
-#include"PConv.h"
-#include"main.h"
-#include"Color.h"
-#include"VFont.h"
-#include"ShaderMgr.h"
+#include "Base.h"
+#include "CGO.h"
+#include "Color.h"
+#include "Err.h"
 #include "Feedback.h"
+#include "MemoryDebug.h"
+#include "ObjectCGO.h"
+#include "PConv.h"
+#include "Scene.h"
+#include "Setting.h"
+#include "ShaderMgr.h"
+#include "VFont.h"
+#include "main.h"
 
-static PyObject *ObjectCGOStateAsPyList(ObjectCGOState * I)
+static PyObject* ObjectCGOStateAsPyList(ObjectCGOState* I)
 {
-  PyObject *result = nullptr;
+  PyObject* result = nullptr;
 
   result = PyList_New(1);
-  if(I->origCGO)
+  if (I->origCGO)
     PyList_SetItem(result, 0, CGOAsPyList(I->origCGO.get()));
   else
     PyList_SetItem(result, 0, PConvAutoNone(nullptr));
   return (PConvAutoNone(result));
 }
 
-static PyObject *ObjectCGOAllStatesAsPyList(ObjectCGO * I)
+static PyObject* ObjectCGOAllStatesAsPyList(ObjectCGO* I)
 {
-  PyObject *result = nullptr;
+  PyObject* result = nullptr;
   int a;
   result = PyList_New(I->State.size());
-  for(a = 0; a < I->State.size(); a++) {
+  for (a = 0; a < I->State.size(); a++) {
     PyList_SetItem(result, a, ObjectCGOStateAsPyList(&I->State[a]));
   }
   return (PConvAutoNone(result));
 }
 
-static int ObjectCGOStateFromPyList(PyMOLGlobals * G, ObjectCGOState * I, PyObject * list,
-                                    int version)
+static int ObjectCGOStateFromPyList(
+    PyMOLGlobals* G, ObjectCGOState* I, PyObject* list, int version)
 {
   int ok = true;
   int ll, pl = 0;
-  PyObject *tmp;
-  if(ok)
+  PyObject* tmp;
+  if (ok)
     ok = (list != nullptr);
-  if(ok)
+  if (ok)
     ok = PyList_Check(list);
-  if(ok)
+  if (ok)
     ll = PyList_Size(list);
   I->origCGO = nullptr;
   /* TO SUPPORT BACKWARDS COMPATIBILITY...
      Always check ll when adding new PyList_GetItem's */
-  if(ok && ll==2) {
+  if (ok && ll == 2) {
     tmp = PyList_GetItem(list, 0);
-    if(CPythonVal_IsNone(tmp))
+    if (CPythonVal_IsNone(tmp))
       I->origCGO = nullptr;
     else {
       I->origCGO.reset(CGONewFromPyList(G, tmp, version, 1));
@@ -82,9 +82,9 @@ static int ObjectCGOStateFromPyList(PyMOLGlobals * G, ObjectCGOState * I, PyObje
     }
     pl++;
   }
-  if(ok && !I->origCGO) {
+  if (ok && !I->origCGO) {
     tmp = PyList_GetItem(list, pl);
-    if(CPythonVal_IsNone(tmp))
+    if (CPythonVal_IsNone(tmp))
       I->origCGO = nullptr;
     else {
       I->origCGO.reset(CGONewFromPyList(G, tmp, version, 0));
@@ -94,51 +94,52 @@ static int ObjectCGOStateFromPyList(PyMOLGlobals * G, ObjectCGOState * I, PyObje
   return (ok);
 }
 
-static int ObjectCGOAllStatesFromPyList(ObjectCGO * I, PyObject * list, int version)
+static int ObjectCGOAllStatesFromPyList(
+    ObjectCGO* I, PyObject* list, int version)
 {
   int ok = true;
   int a;
-  if(ok)
+  if (ok)
     ok = PyList_Check(list);
-  if(ok) {
-    I->State.resize(PyList_Size(list),ObjectCGOState(I->G));
-    for(a = 0; a < I->State.size(); a++) {
-      CPythonVal *val = CPythonVal_PyList_GetItem(I->G, list, a);
-      ok =
-        ObjectCGOStateFromPyList(I->G, &I->State[a], val,
-                                 version);
-      if(!ok)
+  if (ok) {
+    I->State.resize(PyList_Size(list), ObjectCGOState(I->G));
+    for (a = 0; a < I->State.size(); a++) {
+      CPythonVal* val = CPythonVal_PyList_GetItem(I->G, list, a);
+      ok = ObjectCGOStateFromPyList(I->G, &I->State[a], val, version);
+      CPythonVal_Free(val);
+      if (!ok)
         break;
     }
   }
   return (ok);
 }
 
-int ObjectCGONewFromPyList(PyMOLGlobals * G, PyObject * list, ObjectCGO ** result,
-                           int version)
+int ObjectCGONewFromPyList(
+    PyMOLGlobals* G, PyObject* list, ObjectCGO** result, int version)
 {
   int ok = true;
-  ObjectCGO *I = nullptr;
+  ObjectCGO* I = nullptr;
   (*result) = nullptr;
-  if(ok)
+  if (ok)
     ok = (list != nullptr);
-  if(ok)
+  if (ok)
     ok = PyList_Check(list);
 
   I = new ObjectCGO(G);
-  if(ok)
+  if (ok)
     ok = (I != nullptr);
 
-  if(ok){
-    auto *val = PyList_GetItem(list, 0);
+  if (ok) {
+    CPythonVal* val = CPythonVal_PyList_GetItem(G, list, 0);
     ok = ObjectFromPyList(G, val, I);
+    CPythonVal_Free(val);
   }
-  if(ok){
-    CPythonVal *val = CPythonVal_PyList_GetItem(G, list, 2);
+  if (ok) {
+    CPythonVal* val = CPythonVal_PyList_GetItem(G, list, 2);
     ok = ObjectCGOAllStatesFromPyList(I, val, version);
     CPythonVal_Free(val);
   }
-  if(ok) {
+  if (ok) {
     (*result) = I;
     ObjectCGORecomputeExtent(I);
   } else {
@@ -147,9 +148,9 @@ int ObjectCGONewFromPyList(PyMOLGlobals * G, PyObject * list, ObjectCGO ** resul
   return (ok);
 }
 
-PyObject *ObjectCGOAsPyList(ObjectCGO * I)
+PyObject* ObjectCGOAsPyList(ObjectCGO* I)
 {
-  PyObject *result = nullptr;
+  PyObject* result = nullptr;
 
   result = PyList_New(3);
   PyList_SetItem(result, 0, ObjectAsPyList(I));
@@ -159,20 +160,20 @@ PyObject *ObjectCGOAsPyList(ObjectCGO * I)
   return (PConvAutoNone(result));
 }
 
-void ObjectCGORecomputeExtent(ObjectCGO * I)
+void ObjectCGORecomputeExtent(ObjectCGO* I)
 {
   float mx[3], mn[3];
   int extent_flag = false;
   int has_normals = 0;
-  CGO *cgo;
-  for(auto& state : I->State){
+  CGO* cgo;
+  for (auto& state : I->State) {
     cgo = state.origCGO.get();
-    if (!cgo){
+    if (!cgo) {
       cgo = state.renderCGO.get();
     }
-    if(cgo) {
-      if(CGOGetExtent(cgo, mn, mx)) {
-        if(!extent_flag) {
+    if (cgo) {
+      if (CGOGetExtent(cgo, mn, mx)) {
+        if (!extent_flag) {
           extent_flag = true;
           copy3f(mx, I->ExtentMax);
           copy3f(mn, I->ExtentMin);
@@ -181,8 +182,8 @@ void ObjectCGORecomputeExtent(ObjectCGO * I)
           min3f(mn, I->ExtentMin, I->ExtentMin);
         }
       }
-      if (!has_normals && cgo && CGOHasNormals(cgo)){
-	has_normals = 1;
+      if (!has_normals && cgo && CGOHasNormals(cgo)) {
+        has_normals = 1;
       }
     }
   }
@@ -195,15 +196,15 @@ void ObjectCGORecomputeExtent(ObjectCGO * I)
 void ObjectCGO::invalidate(cRep_t rep, cRepInv_t level, int state)
 {
   auto I = this;
-  ObjectCGOState *sobj = nullptr;
+  ObjectCGOState* sobj = nullptr;
 
-  if(state < 0) {
-    for(auto& state : I->State) {
+  if (state < 0) {
+    for (auto& state : I->State) {
       sobj = &state;
       sobj->renderCGO = nullptr;
     }
   } else {
-    if((state >= 0) && (state < I->State.size())) {
+    if ((state >= 0) && (state < I->State.size())) {
       //      I->State[state].valid = false;
       sobj = &I->State[state];
       sobj->renderCGO = nullptr;
@@ -218,7 +219,7 @@ void ObjectCGO::update()
   for (auto& state : State) {
     state.renderCGO = nullptr;
   }
-  SceneInvalidate(G);    /* needed ? */
+  SceneInvalidate(G); /* needed ? */
 }
 
 /*========================================================================*/
@@ -232,9 +233,9 @@ static void ObjectCGORenderState(PyMOLGlobals* G, RenderPass pass, CRay* ray,
     ObjectCGO* I, RenderInfo* info, ObjectCGOState* sobj, const float* color,
     ObjectGadgetRamp* ramp, int use_shader, bool cgo_lighting)
 {
-  if(ray) {
-    if(sobj) {
-      if(sobj->origCGO){
+  if (ray) {
+    if (sobj) {
+      if (sobj->origCGO) {
         CGO *cgo = sobj->origCGO.get(), *cgo_copy = nullptr;
         if (cgo_lighting && CGOHasAnyTriangleVerticesWithoutNormals(cgo)) {
           cgo = cgo_copy = CGOGenerateNormalsForTriangles(cgo);
@@ -248,95 +249,111 @@ static void ObjectCGORenderState(PyMOLGlobals* G, RenderPass pass, CRay* ray,
       PickContext context;
       context.object = I;
       context.state = sobj - I->State.data();
-      CGORenderPicking(sobj->renderCGO.get(), info, &context, I->Setting.get(), nullptr);
+      CGORenderPicking(
+          sobj->renderCGO.get(), info, &context, I->Setting.get(), nullptr);
     } else if (pass != RenderPass::Antialias) {
       bool pass_is_opaque = pass == RenderPass::Opaque;
-      if(sobj && ((sobj->hasTransparency ^ pass_is_opaque) || (sobj->hasOpaque == pass_is_opaque))){
-	{
-	  CShaderPrg *shaderPrg;
-	  int two_sided_lighting = SettingGet_i(G, I->Setting.get(), nullptr, cSetting_two_sided_lighting);
-          bool backface_cull = SettingGet_i(G, I->Setting.get(), nullptr, cSetting_backface_cull);
-	  if (two_sided_lighting<0){
-	    two_sided_lighting = !cgo_lighting;
-	  }
-	  two_sided_lighting &= cgo_lighting;  // only set two_sided_lighting if cgo_lighting is set
+      if (sobj && ((sobj->hasTransparency ^ pass_is_opaque) ||
+                      (sobj->hasOpaque == pass_is_opaque))) {
+        {
+          CShaderPrg* shaderPrg;
+          int two_sided_lighting = SettingGet_i(
+              G, I->Setting.get(), nullptr, cSetting_two_sided_lighting);
+          bool backface_cull = SettingGet_i(
+              G, I->Setting.get(), nullptr, cSetting_backface_cull);
+          if (two_sided_lighting < 0) {
+            two_sided_lighting = !cgo_lighting;
+          }
+          two_sided_lighting &= cgo_lighting; // only set two_sided_lighting if
+                                              // cgo_lighting is set
 #ifndef PURE_OPENGL_ES_2
-	  if (cgo_lighting){
-	    glEnable(GL_LIGHTING);
-	  } else {
-	    glDisable(GL_LIGHTING);
-	  }
-	  if (two_sided_lighting){
-	    if (use_shader)
-	      glEnable(GL_VERTEX_PROGRAM_TWO_SIDE);
-	    glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
-	  } else {
-	    if (use_shader)
-	      glDisable(GL_VERTEX_PROGRAM_TWO_SIDE);
-	    glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_FALSE);
-	  }
+          if (cgo_lighting) {
+            glEnable(GL_LIGHTING);
+          } else {
+            glDisable(GL_LIGHTING);
+          }
+          if (two_sided_lighting) {
+            if (use_shader)
+              glEnable(GL_VERTEX_PROGRAM_TWO_SIDE);
+            glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
+          } else {
+            if (use_shader)
+              glDisable(GL_VERTEX_PROGRAM_TWO_SIDE);
+            glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_FALSE);
+          }
 #endif
-	  if (backface_cull){
-	    glCullFace(GL_BACK);
-	    glEnable(GL_CULL_FACE);
-	  }
+          if (backface_cull) {
+            glCullFace(GL_BACK);
+            glEnable(GL_CULL_FACE);
+          }
 
-	  if (use_shader){
-	    shaderPrg = G->ShaderMgr->Enable_DefaultShader(info->pass);
-	    if (!shaderPrg) return;
-	    shaderPrg->SetLightingEnabled(cgo_lighting);
-	    shaderPrg->Set1i("two_sided_lighting_enabled", two_sided_lighting);
-	    sobj->renderCGO->use_shader = use_shader;
-	    sobj->renderCGO->debug = SettingGetGlobal_i(G, cSetting_cgo_debug);
-	    CGORender(sobj->renderCGO.get(), color, I->Setting.get(), nullptr, info, nullptr);
-	    shaderPrg->Disable();
-	  } else {
-	    sobj->renderCGO->use_shader = use_shader;
-	    sobj->renderCGO->debug = SettingGetGlobal_i(G, cSetting_cgo_debug);
-	    CGORender(sobj->renderCGO.get(), color, I->Setting.get(), nullptr, info, nullptr);
-	  }
-	    if (backface_cull){
-	      glDisable(GL_CULL_FACE);
-	    }
+          if (use_shader) {
+            shaderPrg = G->ShaderMgr->Enable_DefaultShader(info->pass);
+            if (!shaderPrg)
+              return;
+            shaderPrg->SetLightingEnabled(cgo_lighting);
+            shaderPrg->Set1i("two_sided_lighting_enabled", two_sided_lighting);
+            sobj->renderCGO->use_shader = use_shader;
+            sobj->renderCGO->debug = SettingGetGlobal_i(G, cSetting_cgo_debug);
+            CGORender(sobj->renderCGO.get(), color, I->Setting.get(), nullptr,
+                info, nullptr);
+            shaderPrg->Disable();
+          } else {
+            sobj->renderCGO->use_shader = use_shader;
+            sobj->renderCGO->debug = SettingGetGlobal_i(G, cSetting_cgo_debug);
+            CGORender(sobj->renderCGO.get(), color, I->Setting.get(), nullptr,
+                info, nullptr);
+          }
+          if (backface_cull) {
+            glDisable(GL_CULL_FACE);
+          }
 #ifndef PURE_OPENGL_ES_2
-	    if (two_sided_lighting){
-	      if (use_shader)
-		glDisable(GL_VERTEX_PROGRAM_TWO_SIDE);
-	      glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_FALSE);
-	    }
-	    if (!cgo_lighting){
-	      glEnable(GL_LIGHTING);
-	    }
+          if (two_sided_lighting) {
+            if (use_shader)
+              glDisable(GL_VERTEX_PROGRAM_TWO_SIDE);
+            glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_FALSE);
+          }
+          if (!cgo_lighting) {
+            glEnable(GL_LIGHTING);
+          }
 #endif
-	}
+        }
       }
     }
   }
 }
 
-static void ObjectCGOGenerateCGO(PyMOLGlobals * G, ObjectCGO * I, ObjectCGOState *sobj, bool use_shader, bool cgo_lighting, const float *color, ObjectGadgetRamp *ramp, int state)
+static void ObjectCGOGenerateCGO(PyMOLGlobals* G, ObjectCGO* I,
+    ObjectCGOState* sobj, bool use_shader, bool cgo_lighting,
+    const float* color, ObjectGadgetRamp* ramp, int state)
 {
-  if (sobj->renderCGO && 
-      ((use_shader ^ sobj->renderWithShaders) ||
-       (cgo_lighting ^ sobj->cgo_lighting))){
+  if (sobj->renderCGO && ((use_shader ^ sobj->renderWithShaders) ||
+                             (cgo_lighting ^ sobj->cgo_lighting))) {
     // if renderWithShaders doesn't match use_shader, clear CGO and re-generate
     sobj->renderCGO = nullptr;
   }
-  if (!sobj->renderCGO){
+  if (!sobj->renderCGO) {
     float colorWithA[4];
     short someLinesWithoutNormals = 0;
-    if (color){
-      colorWithA[0] = color[0]; colorWithA[1] = color[1]; colorWithA[2] = color[2];
+    if (color) {
+      colorWithA[0] = color[0];
+      colorWithA[1] = color[1];
+      colorWithA[2] = color[2];
     } else {
-      colorWithA[0] = 1.f; colorWithA[1] = 1.f; colorWithA[2] = 1.f;
+      colorWithA[0] = 1.f;
+      colorWithA[1] = 1.f;
+      colorWithA[2] = 1.f;
     }
-    colorWithA[3] = 1.f - SettingGet_f(G, I->Setting.get(), nullptr, cSetting_cgo_transparency);
+    colorWithA[3] = 1.f - SettingGet_f(G, I->Setting.get(), nullptr,
+                              cSetting_cgo_transparency);
 
-    bool hasTransparency = (colorWithA[3] < 1.f || CGOHasTransparency(sobj->origCGO.get()));
-    bool hasOpaque = (colorWithA[3] == 1.f || CGOHasOpaque(sobj->origCGO.get()));
+    bool hasTransparency =
+        (colorWithA[3] < 1.f || CGOHasTransparency(sobj->origCGO.get()));
+    bool hasOpaque =
+        (colorWithA[3] == 1.f || CGOHasOpaque(sobj->origCGO.get()));
 
-    CGO *allCylinders = nullptr;
-    CGO *allSpheres = nullptr;
+    CGO* allCylinders = nullptr;
+    CGO* allSpheres = nullptr;
     CGO* allBeziers = nullptr;
     pymol::cache_ptr<CGO> preOpt;
 
@@ -344,18 +361,19 @@ static void ObjectCGOGenerateCGO(PyMOLGlobals * G, ObjectCGO * I, ObjectCGOState
       std::unique_ptr<CGO> inputWithLighting;
       const CGO* inputCGO = sobj->origCGO.get();
 
-      if (cgo_lighting){
-	if (CGOHasAnyTriangleVerticesWithoutNormals(inputCGO)){
-	  // we only need normals if cgo_lighting is on
+      if (cgo_lighting) {
+        if (CGOHasAnyTriangleVerticesWithoutNormals(inputCGO)) {
+          // we only need normals if cgo_lighting is on
           inputWithLighting.reset(CGOGenerateNormalsForTriangles(inputCGO));
           inputCGO = inputWithLighting.get();
-	}
-	someLinesWithoutNormals = CGOHasAnyLineVerticesWithoutNormals(inputCGO);
-	if (!use_shader && someLinesWithoutNormals){
-	  // if some lines without normals, turn lighting off on lines
-          inputWithLighting.reset(CGOTurnLightingOnLinesOff(inputCGO, use_shader));
+        }
+        someLinesWithoutNormals = CGOHasAnyLineVerticesWithoutNormals(inputCGO);
+        if (!use_shader && someLinesWithoutNormals) {
+          // if some lines without normals, turn lighting off on lines
+          inputWithLighting.reset(
+              CGOTurnLightingOnLinesOff(inputCGO, use_shader));
           inputCGO = inputWithLighting.get();
-	}
+        }
       }
 
       CGO* convertcgo = CGONew(G);
@@ -365,30 +383,31 @@ static void ObjectCGOGenerateCGO(PyMOLGlobals * G, ObjectCGO * I, ObjectCGOState
       CGOAppend(convertcgo, inputCGO);
       inputWithLighting.reset();
 
-      if (use_shader){
-        bool t_mode_3 = SettingGetGlobal_i(G, cSetting_transparency_mode)==3;
-        if ((t_mode_3 || !hasTransparency)
-            && G->ShaderMgr->Get_DefaultSphereShader(RenderPass::Antialias)
-            && G->ShaderMgr->Get_CylinderShader(RenderPass::Antialias))
-        {
-          if (CGOHasCylinderOperations(convertcgo)){
+      if (use_shader) {
+        bool t_mode_3 = SettingGetGlobal_i(G, cSetting_transparency_mode) == 3;
+        if ((t_mode_3 || !hasTransparency) &&
+            G->ShaderMgr->Get_DefaultSphereShader(RenderPass::Antialias) &&
+            G->ShaderMgr->Get_CylinderShader(RenderPass::Antialias)) {
+          if (CGOHasCylinderOperations(convertcgo)) {
             allCylinders = CGONew(G);
             CGOEnable(allCylinders, GL_CYLINDER_SHADER);
-            CGO* newCGO = CGOConvertShaderCylindersToCylinderShader(convertcgo, allCylinders);
+            CGO* newCGO = CGOConvertShaderCylindersToCylinderShader(
+                convertcgo, allCylinders);
             allCylinders->free_append(newCGO);
             assert(newCGO == nullptr);
             CGODisable(allCylinders, GL_CYLINDER_SHADER);
             CGOStop(allCylinders);
-            CGO *allButCylinders = CGONew(G);
+            CGO* allButCylinders = CGONew(G);
             CGOFilterOutCylinderOperationsInto(convertcgo, allButCylinders);
             CGOStop(allButCylinders);
             CGOFree(convertcgo);
             convertcgo = allButCylinders;
           }
-          if (CGOHasOperationsOfType(convertcgo, CGO_SPHERE)){
-            CGO *allButSpheres = CGONew(G);
-            allSpheres = CGOOptimizeSpheresToVBONonIndexed(convertcgo, 0, true, allButSpheres);
-            if (allSpheres){
+          if (CGOHasOperationsOfType(convertcgo, CGO_SPHERE)) {
+            CGO* allButSpheres = CGONew(G);
+            allSpheres = CGOOptimizeSpheresToVBONonIndexed(
+                convertcgo, 0, true, allButSpheres);
+            if (allSpheres) {
               CGOFree(convertcgo);
               CGOStop(allButSpheres);
               convertcgo = allButSpheres;
@@ -414,19 +433,20 @@ static void ObjectCGOGenerateCGO(PyMOLGlobals * G, ObjectCGO * I, ObjectCGOState
       CGOFree(convertcgo);
     }
 
-    if (ramp){
-      preOpt.reset(CGOColorByRamp(G, preOpt.get(), ramp, state, I->Setting.get()));
+    if (ramp) {
+      preOpt.reset(
+          CGOColorByRamp(G, preOpt.get(), ramp, state, I->Setting.get()));
     }
 
     sobj->hasTransparency = hasTransparency;
     sobj->hasOpaque = hasOpaque;
 
-    if (use_shader){
+    if (use_shader) {
       if (hasTransparency) {
         preOpt.reset(CGOOptimizeToVBOIndexedWithColorEmbedTransparentInfo(
             preOpt.get(), 0, colorWithA, false));
 
-        if (someLinesWithoutNormals){
+        if (someLinesWithoutNormals) {
           // if some lines without normals, turn lighting off on lines
           CGO* convertcgo = preOpt.release();
           preOpt.reset(CGOTurnLightingOnLinesOff(convertcgo, use_shader));
@@ -436,11 +456,11 @@ static void ObjectCGOGenerateCGO(PyMOLGlobals * G, ObjectCGO * I, ObjectCGOState
         preOpt.reset(CGOOptimizeToVBONotIndexed(preOpt.get(), 0));
       }
 
-      if (allCylinders){
+      if (allCylinders) {
         preOpt->free_append(allCylinders);
       }
 
-      if (allSpheres){
+      if (allSpheres) {
         preOpt->free_append(allSpheres);
       }
 
@@ -455,7 +475,7 @@ static void ObjectCGOGenerateCGO(PyMOLGlobals * G, ObjectCGO * I, ObjectCGOState
 
       if (sobj->hasTransparency) {
         sobj->renderCGO.reset(CGOConvertTrianglesToAlpha(preOpt.get()));
-	sobj->renderCGO->render_alpha = 2;
+        sobj->renderCGO->render_alpha = 2;
       } else {
         sobj->renderCGO.reset(CGOSimplify(preOpt.get(), 0));
       }
@@ -472,37 +492,41 @@ static void ObjectCGOGenerateCGO(PyMOLGlobals * G, ObjectCGO * I, ObjectCGOState
 
 /*========================================================================*/
 
-void ObjectCGO::render(RenderInfo * info)
+void ObjectCGO::render(RenderInfo* info)
 {
   auto I = this;
   int state = info->state;
-  CRay *ray = info->ray;
+  CRay* ray = info->ray;
   const RenderPass pass = info->pass;
-  ObjectCGOState *sobj = nullptr;
-  const float *color = nullptr;
+  ObjectCGOState* sobj = nullptr;
+  const float* color = nullptr;
   bool use_shader = false, cgo_lighting = false;
-  ObjectGadgetRamp *ramp = nullptr;
-  
+  ObjectGadgetRamp* ramp = nullptr;
+
   use_shader = SettingGetGlobal_b(G, cSetting_cgo_use_shader) &
-    SettingGetGlobal_b(G, cSetting_use_shaders);
-  cgo_lighting = SettingGet_i(G, I->Setting.get(), nullptr, cSetting_cgo_lighting);
+               SettingGetGlobal_b(G, cSetting_use_shaders);
+  cgo_lighting =
+      SettingGet_i(G, I->Setting.get(), nullptr, cSetting_cgo_lighting);
 
   ObjectPrepareContext(I, info);
   ramp = ColorGetRamp(G, I->Color);
   color = ColorGet(G, I->Color);
 
-  if(I->State.empty())
+  if (I->State.empty())
     return;
 
-  if(pass != RenderPass::Antialias || info->ray || info->pick) {
-    if((I->visRep & cRepCGOBit)) {
-      for(StateIterator iter(G, I->Setting.get(), state, I->State.size()); iter.next();) {
+  if (pass != RenderPass::Antialias || info->ray || info->pick) {
+    if ((I->visRep & cRepCGOBit)) {
+      for (StateIterator iter(G, I->Setting.get(), state, I->State.size());
+           iter.next();) {
         sobj = &I->State[iter.state];
         if (!sobj->origCGO)
           continue;
         if (!ray)
-          ObjectCGOGenerateCGO(G, I, sobj, use_shader, cgo_lighting, color, ramp, iter.state);
-          ObjectCGORenderState(G, pass, ray, I, info, sobj, color, ramp, use_shader, cgo_lighting);
+          ObjectCGOGenerateCGO(
+              G, I, sobj, use_shader, cgo_lighting, color, ramp, iter.state);
+        ObjectCGORenderState(
+            G, pass, ray, I, info, sobj, color, ramp, use_shader, cgo_lighting);
       }
     }
   }
@@ -545,25 +569,26 @@ ObjectCGOState::ObjectCGOState(const ObjectCGOState& other)
 
 /*========================================================================*/
 
-static CGO *ObjectCGOPyListFloatToCGO(PyMOLGlobals * G, PyObject * list)
+static CGO* ObjectCGOPyListFloatToCGO(PyMOLGlobals* G, PyObject* list)
 {
-  CGO *cgo = nullptr;
+  CGO* cgo = nullptr;
   int len;
   int ok = true;
   int result;
-  float *raw = nullptr;
+  float* raw = nullptr;
 
-  if(PyList_Check(list)) {
+  if (PyList_Check(list)) {
     len = PConvPyListToFloatArray(list, &raw);
-    if(len < 0)
+    if (len < 0)
       len = 0;
-    if(raw) {
-      if(ok) {
+    if (raw) {
+      if (ok) {
         cgo = CGONewSized(G, len);
-        if(cgo) {
+        if (cgo) {
           result = CGOFromFloatArray(cgo, raw, len);
-          if(result) {
-            PRINTF " FloatToCGO: error encountered on element %d\n", result ENDF(G);
+          if (result) {
+            PRINTF " FloatToCGO: error encountered on element %d\n",
+                result ENDF(G);
           }
           CGOStop(cgo);
         }
@@ -576,19 +601,21 @@ static CGO *ObjectCGOPyListFloatToCGO(PyMOLGlobals * G, PyObject * list)
 
 /*========================================================================*/
 
-static CGO *ObjectCGOFloatArrayToCGO(PyMOLGlobals * G, float *raw, int len, int quiet)
+static CGO* ObjectCGOFloatArrayToCGO(
+    PyMOLGlobals* G, float* raw, int len, int quiet)
 {
-  CGO *cgo = nullptr;
+  CGO* cgo = nullptr;
   int ok = true;
   int result;
 
-  if(raw) {
-    if(ok) {
+  if (raw) {
+    if (ok) {
       cgo = CGONewSized(G, len);
-      if(cgo) {
+      if (cgo) {
         result = CGOFromFloatArray(cgo, raw, len);
-        if(result && !quiet) {
-          PRINTF " FloatToCGO: error encountered on element %d\n", result ENDF(G);
+        if (result && !quiet) {
+          PRINTF " FloatToCGO: error encountered on element %d\n",
+              result ENDF(G);
         }
         CGOStop(cgo);
       }
@@ -599,22 +626,23 @@ static CGO *ObjectCGOFloatArrayToCGO(PyMOLGlobals * G, float *raw, int len, int 
 
 /*========================================================================*/
 
-ObjectCGO *ObjectCGOFromCGO(PyMOLGlobals * G, ObjectCGO * obj, CGO * cgo, int state)
+ObjectCGO* ObjectCGOFromCGO(
+    PyMOLGlobals* G, ObjectCGO* obj, CGO* cgo, int state)
 {
-  ObjectCGO *I = nullptr;
+  ObjectCGO* I = nullptr;
 
   int size_n;
 
-  if(!obj) {
+  if (!obj) {
     I = new ObjectCGO(G);
     size_n = 0;
   } else {
     size_n = obj->State.size();
     I = obj;
   }
-  if(state < 0)
+  if (state < 0)
     state = I->State.size();
-  if(I->State.size() <= state) {
+  if (I->State.size() <= state) {
     I->State.resize(size_n + 1, ObjectCGOState(G));
   }
 
@@ -622,7 +650,7 @@ ObjectCGO *ObjectCGOFromCGO(PyMOLGlobals * G, ObjectCGO * obj, CGO * cgo, int st
   I->State[state].origCGO = nullptr;
   I->State[state].origCGO.reset(cgo);
 
-  if(I) {
+  if (I) {
     ObjectCGORecomputeExtent(I);
   }
   SceneChanged(G);
@@ -632,13 +660,13 @@ ObjectCGO *ObjectCGOFromCGO(PyMOLGlobals * G, ObjectCGO * obj, CGO * cgo, int st
 
 /*========================================================================*/
 
-ObjectCGO *ObjectCGONewVFontTest(PyMOLGlobals * G, const char *text, float *pos)
+ObjectCGO* ObjectCGONewVFontTest(PyMOLGlobals* G, const char* text, float* pos)
 {
 
-  ObjectCGO *I = nullptr;
+  ObjectCGO* I = nullptr;
   int font_id;
-  CGO *cgo = nullptr;
-  float scale[2] = { 1.0, 1.0 };
+  CGO* cgo = nullptr;
+  float scale[2] = {1.0, 1.0};
 
   font_id = VFontLoad(G, 1, 1, 1, true);
   cgo = CGONew(G);
@@ -653,59 +681,60 @@ ObjectCGO *ObjectCGONewVFontTest(PyMOLGlobals * G, const char *text, float *pos)
 /**
  * @pre GIL
  */
-ObjectCGO *ObjectCGODefine(PyMOLGlobals * G, ObjectCGO * obj, PyObject * pycgo, int state)
+ObjectCGO* ObjectCGODefine(
+    PyMOLGlobals* G, ObjectCGO* obj, PyObject* pycgo, int state)
 {
   assert(PyGILState_Check());
 
-  ObjectCGO *I = nullptr;
+  ObjectCGO* I = nullptr;
 
   CGO *cgo, *font_cgo;
   int est;
 
   int size_n;
 
-  if(obj) {
-    if(obj->type != cObjectCGO){     /* TODO: handle this */
+  if (obj) {
+    if (obj->type != cObjectCGO) { /* TODO: handle this */
       obj = nullptr;
   }
     size_n = obj->State.size();
   }
-  if(!obj) {
+  if (!obj) {
     I = new ObjectCGO(G);
     size_n = 0;
   } else {
     I = obj;
   }
-  if(state < 0){
+  if (state < 0) {
     state = I->State.size();
   }
-  if(I->State.size() <= state) {
+  if (I->State.size() <= state) {
     I->State.resize(state + 1, ObjectCGOState(G));
   }
 
   I->State[state].origCGO = nullptr;
 
-  if(PyList_Check(pycgo)) {
-    if(PyList_Size(pycgo)) {
-      if(PyFloat_Check(PyList_GetItem(pycgo, 0))) {
+  if (PyList_Check(pycgo)) {
+    if (PyList_Size(pycgo)) {
+      if (PyFloat_Check(PyList_GetItem(pycgo, 0))) {
         cgo = ObjectCGOPyListFloatToCGO(G, pycgo);
-        if(cgo) {
+        if (cgo) {
           est = CGOCheckForText(cgo);
-          if(est) {
+          if (est) {
             CGOPreloadFonts(cgo);
             font_cgo = CGODrawText(cgo, est, nullptr);
             CGOFree(cgo);
             cgo = font_cgo;
           }
           est = CGOCheckComplex(cgo);
-	        I->State[state].origCGO.reset(cgo);
+          I->State[state].origCGO.reset(cgo);
         } else {
           ErrMessage(G, "ObjectCGO", "could not parse CGO List.");
         }
       }
     }
   }
-  if(I) {
+  if (I) {
     ObjectCGORecomputeExtent(I);
   }
   SceneChanged(G);
@@ -713,31 +742,31 @@ ObjectCGO *ObjectCGODefine(PyMOLGlobals * G, ObjectCGO * obj, PyObject * pycgo, 
   return (I);
 }
 
-ObjectCGO *ObjectCGOFromFloatArray(PyMOLGlobals * G, ObjectCGO * obj,
-                                   float *array, int size, int state, int quiet)
+ObjectCGO* ObjectCGOFromFloatArray(PyMOLGlobals* G, ObjectCGO* obj,
+    float* array, int size, int state, int quiet)
 {
-  ObjectCGO *I = nullptr;
+  ObjectCGO* I = nullptr;
 
   CGO *cgo, *font_cgo;
   int est;
 
   int size_n;
 
-  if(obj) {
-    if(obj->type != cObjectCGO){     /* TODO: handle this */
+  if (obj) {
+    if (obj->type != cObjectCGO) { /* TODO: handle this */
       obj = nullptr;
   }
     size_n = obj->State.size();
   }
-  if(!obj) {
+  if (!obj) {
     I = new ObjectCGO(G);
     size_n = 0;
   } else {
     I = obj;
   }
-  if(state < 0)
+  if (state < 0)
     state = I->State.size();
-  if(I->State.size() <= state) {
+  if (I->State.size() <= state) {
     I->State.resize(size_n + 1, ObjectCGOState(G));
   }
 
@@ -745,9 +774,9 @@ ObjectCGO *ObjectCGOFromFloatArray(PyMOLGlobals * G, ObjectCGO * obj,
   I->State[state].origCGO = nullptr;
 
   cgo = ObjectCGOFloatArrayToCGO(G, array, size, quiet);
-  if(cgo) {
+  if (cgo) {
     est = CGOCheckForText(cgo);
-    if(est) {
+    if (est) {
       CGOPreloadFonts(cgo);
       font_cgo = CGODrawText(cgo, est, nullptr);
       CGOFree(cgo);
@@ -755,10 +784,10 @@ ObjectCGO *ObjectCGOFromFloatArray(PyMOLGlobals * G, ObjectCGO * obj,
     }
     est = CGOCheckComplex(cgo);
     I->State[state].origCGO.reset(cgo);
-  } else if(!quiet) {
+  } else if (!quiet) {
     ErrMessage(G, "ObjectCGO", "could not parse CGO.");
   }
-  if(I) {
+  if (I) {
     ObjectCGORecomputeExtent(I);
   }
   SceneChanged(G);

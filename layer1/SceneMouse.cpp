@@ -17,6 +17,7 @@
 #include "Seq.h"
 #include "Wizard.h"
 #include "Feedback.h"
+#include "Util2.h"
 
 #include <glm/vec3.hpp>
 #include <glm/mat4x4.hpp>

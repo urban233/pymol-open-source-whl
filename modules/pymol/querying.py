@@ -848,6 +848,13 @@ NOTES
                 r = _cmd.get_color(_self._COb,'',1)
         return r
 
+    def get_color_index_from_string_or_list(color, *, _self=cmd):
+        if isinstance(color, str) and color[:1] in '[(':
+            color = _self.safe_list_eval(color)
+        if isinstance(color, (list, tuple)):
+            color = '0x%02x%02x%02x' % tuple(int(v * 255) for v in color)
+        return get_color_index(color, _self=_self)
+
     def get_color_index(color,*, _self=cmd):
         with _self.lockcm:
             r = _cmd.get_color(_self._COb,str(color),3)

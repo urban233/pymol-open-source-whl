@@ -1,52 +1,52 @@
 
-/* 
+/*
 A* -------------------------------------------------------------------
 B* This file contains source code for the PyMOL computer program
-C* copyright 1998-2000 by Warren Lyford Delano of DeLano Scientific. 
+C* copyright 1998-2000 by Warren Lyford Delano of DeLano Scientific.
 D* -------------------------------------------------------------------
 E* It is unlawful to modify or remove this copyright notice.
 F* -------------------------------------------------------------------
-G* Please see the accompanying LICENSE file for further information. 
+G* Please see the accompanying LICENSE file for further information.
 H* -------------------------------------------------------------------
 I* Additional authors of this source file include:
--* 
--* 
+-*
+-*
 -*
 Z* -------------------------------------------------------------------
 */
-#include"os_python.h"
+#include "os_python.h"
 
-#include"os_predef.h"
-#include"os_std.h"
+#include "os_predef.h"
+#include "os_std.h"
 
-#include"Base.h"
-#include"MemoryDebug.h"
-#include"Err.h"
-#include"Scene.h"
-#include"GadgetSet.h"
-#include"ObjectGadget.h"
-#include"Color.h"
-#include"PConv.h"
-#include"main.h"
-#include"CGO.h"
-#include"ShaderMgr.h"
-#include"Ray.h"
+#include "Base.h"
+#include "CGO.h"
+#include "Color.h"
+#include "Err.h"
+#include "GadgetSet.h"
+#include "MemoryDebug.h"
+#include "ObjectGadget.h"
+#include "PConv.h"
+#include "Ray.h"
+#include "Scene.h"
+#include "ShaderMgr.h"
+#include "main.h"
 
-int GadgetSetGetVertex(const GadgetSet * I, int index, int base, float *v)
+int GadgetSetGetVertex(const GadgetSet* I, int index, int base, float* v)
 {
   int ok = true;
   float *v0, *v1;
-  if(index < I->NCoord) {
+  if (index < I->NCoord) {
     v0 = I->Coord + 3 * index;
-    if(base < 0) {
+    if (base < 0) {
       copy3f(v0, v);
-      if(index){
+      if (index) {
         add3f(I->Coord, v, v);
       }
-    } else if(base < I->NCoord) {
+    } else if (base < I->NCoord) {
       v1 = I->Coord + 3 * base;
       add3f(v1, v0, v);
-      if(index)
+      if (index)
         add3f(I->Coord, v, v);
     } else {
       ok = false;
@@ -56,26 +56,26 @@ int GadgetSetGetVertex(const GadgetSet * I, int index, int base, float *v)
   return (ok);
 }
 
-int GadgetSetSetVertex(GadgetSet * I, int index, int base, const float *v)
+int GadgetSetSetVertex(GadgetSet* I, int index, int base, const float* v)
 {
   int ok = true;
   float *v0, *v1;
-  if(index < I->NCoord) {
+  if (index < I->NCoord) {
     v0 = I->Coord + 3 * index;
-    if(base < 0) {
+    if (base < 0) {
       copy3f(v, v0);
-      if(index){
+      if (index) {
         subtract3f(v0, I->Coord, v0);
       } else {
-	if (I->offsetPtOP)
-	  copy3f(v0, &I->StdCGO->op[I->offsetPtOP]);
-	if (I->offsetPtOPick)
-	  copy3f(v0, &I->PickCGO->op[I->offsetPtOPick]);
+        if (I->offsetPtOP)
+          copy3f(v0, &I->StdCGO->op[I->offsetPtOP]);
+        if (I->offsetPtOPick)
+          copy3f(v0, &I->PickCGO->op[I->offsetPtOPick]);
       }
-    } else if(base < I->NCoord) {
+    } else if (base < I->NCoord) {
       v1 = I->Coord + 3 * base;
       subtract3f(v, v1, v0);
-      if(index)
+      if (index)
         subtract3f(v0, I->Coord, v0);
     } else {
       ok = false;
@@ -85,64 +85,66 @@ int GadgetSetSetVertex(GadgetSet * I, int index, int base, const float *v)
   return (ok);
 }
 
-int GadgetSetFromPyList(PyMOLGlobals * G, PyObject * list, GadgetSet ** gs, int version)
+int GadgetSetFromPyList(
+    PyMOLGlobals* G, PyObject* list, GadgetSet** gs, int version)
 {
   int ok = true;
-  GadgetSet *I = nullptr;
-  PyObject *tmp = nullptr;
+  GadgetSet* I = nullptr;
+  PyObject* tmp = nullptr;
 
-  if(*gs) {
+  if (*gs) {
     delete *gs;
     *gs = nullptr;
   }
 
-  if(list == Py_None) {         /* allow None for GSet */
+  if (list == Py_None) { /* allow None for GSet */
     *gs = nullptr;
   } else {
 
-    if(ok)
+    if (ok)
       I = GadgetSetNew(G);
-    if(ok)
+    if (ok)
       ok = (I != nullptr);
-    if(ok)
+    if (ok)
       ok = (list != nullptr);
-    if(ok)
+    if (ok)
       ok = PyList_Check(list);
     /* TO SUPPORT BACKWARDS COMPATIBILITY...
        Always check ll when adding new PyList_GetItem's */
 
-    if(ok)
+    if (ok)
       ok = PConvPyIntToInt(PyList_GetItem(list, 0), &I->NCoord);
-    if(ok && I->NCoord)
+    if (ok && I->NCoord)
       ok = PConvPyListToFloatVLA(PyList_GetItem(list, 1), &I->Coord);
 
-    if(ok)
+    if (ok)
       ok = PConvPyIntToInt(PyList_GetItem(list, 2), &I->NNormal);
-    if(ok && I->NNormal)
+    if (ok && I->NNormal)
       ok = PConvPyListToFloatVLA(PyList_GetItem(list, 3), &I->Normal);
 
-    if(ok)
+    if (ok)
       ok = PConvPyIntToInt(PyList_GetItem(list, 4), &I->NColor);
-    if(ok && I->NColor)
+    if (ok && I->NColor)
       ok = PConvPyListToFloatVLA(PyList_GetItem(list, 5), &I->Color);
 
-    if(ok)
+    if (ok)
       ok = ((tmp = PyList_GetItem(list, 6)) != nullptr);
-    if(ok && (tmp != Py_None))
+    if (ok && (tmp != Py_None))
       ok = ((I->ShapeCGO = CGONewFromPyList(I->G, tmp, version)) != nullptr);
 
-    if(ok)
+    if (ok)
       ok = ((tmp = PyList_GetItem(list, 7)) != nullptr);
-    if(ok && (tmp != Py_None))
-      ok = ((I->PickShapeCGO = CGONewFromPyList(I->G, tmp, version)) != nullptr);
+    if (ok && (tmp != Py_None))
+      ok =
+          ((I->PickShapeCGO = CGONewFromPyList(I->G, tmp, version)) != nullptr);
 
-    if(ok && I->ShapeCGO)
-      if(CGOCheckForText(I->ShapeCGO)) {
+    if (ok && I->ShapeCGO)
+      if (CGOCheckForText(I->ShapeCGO)) {
         CGOPreloadFonts(I->ShapeCGO);
       }
 
-    if(!ok) {
-      if(I)
+    if (!ok) {
+      if (I)
         delete I;
     } else {
       *gs = I;
@@ -152,61 +154,61 @@ int GadgetSetFromPyList(PyMOLGlobals * G, PyObject * list, GadgetSet ** gs, int 
   return (ok);
 }
 
-PyObject *GadgetSetAsPyList(GadgetSet * I, bool incl_cgos)
+PyObject* GadgetSetAsPyList(GadgetSet* I, bool incl_cgos)
 {
-  PyObject *result = nullptr;
+  PyObject* result = nullptr;
 
-  if(I) {
+  if (I) {
     result = PyList_New(8);
 
     PyList_SetItem(result, 0, PyInt_FromLong(I->NCoord));
 
-    if(I->NCoord) {
-      PyList_SetItem(result, 1, PConvFloatArrayToPyList(I->Coord, I->NCoord * 3));
+    if (I->NCoord) {
+      PyList_SetItem(
+          result, 1, PConvFloatArrayToPyList(I->Coord, I->NCoord * 3));
     } else {
       PyList_SetItem(result, 1, PConvAutoNone(nullptr));
     }
 
     PyList_SetItem(result, 2, PyInt_FromLong(I->NNormal));
 
-    if(I->NNormal) {
-      PyList_SetItem(result, 3, PConvFloatArrayToPyList(I->Normal, I->NNormal * 3));
+    if (I->NNormal) {
+      PyList_SetItem(
+          result, 3, PConvFloatArrayToPyList(I->Normal, I->NNormal * 3));
     } else {
       PyList_SetItem(result, 3, PConvAutoNone(nullptr));
     }
 
     PyList_SetItem(result, 4, PyInt_FromLong(I->NColor));
 
-    if(I->NColor) {
+    if (I->NColor) {
       PyList_SetItem(result, 5, PConvFloatArrayToPyList(I->Color, I->NColor));
     } else {
       PyList_SetItem(result, 5, PConvAutoNone(nullptr));
     }
 
-    if(incl_cgos && I->ShapeCGO) {
+    if (incl_cgos && I->ShapeCGO) {
       PyList_SetItem(result, 6, CGOAsPyList(I->ShapeCGO));
     } else {
       PyList_SetItem(result, 6, PConvAutoNone(nullptr));
     }
 
-    if(incl_cgos && I->PickShapeCGO) {
+    if (incl_cgos && I->PickShapeCGO) {
       PyList_SetItem(result, 7, CGOAsPyList(I->PickShapeCGO));
     } else {
       PyList_SetItem(result, 7, PConvAutoNone(nullptr));
     }
-
   }
   return (PConvAutoNone(result));
 }
 
-
 /*========================================================================*/
-int GadgetSetGetExtent(GadgetSet * I, float *mn, float *mx)
+int GadgetSetGetExtent(GadgetSet* I, float* mn, float* mx)
 {
-  float *v;
+  float* v;
   int a;
   v = I->Coord;
-  for(a = 0; a < I->NCoord; a++) {
+  for (a = 0; a < I->NCoord; a++) {
     min3f(v, mn, mn);
     max3f(v, mx, mx);
     v += 3;
@@ -214,38 +216,33 @@ int GadgetSetGetExtent(GadgetSet * I, float *mn, float *mx)
   return (I->NCoord);
 }
 
-
 /*========================================================================*/
-void GadgetSet::invalidateRep(cRep_t type, cRepInv_t level)
-{
-}
-
+void GadgetSet::invalidateRep(cRep_t type, cRepInv_t level) {}
 
 /*========================================================================*/
 void GadgetSet::update()
 {
-  GadgetSet * I = this;
-  if(I->StdCGO) {
+  GadgetSet* I = this;
+  if (I->StdCGO) {
     CGOFree(I->StdCGO);
     I->offsetPtOP = 0;
     I->StdCGO = nullptr;
   }
-  if(I->PickCGO) {
+  if (I->PickCGO) {
     CGOFree(I->PickCGO);
     I->offsetPtOPick = 0;
     I->PickCGO = nullptr;
   }
 }
 
-
 /*========================================================================*/
-void GadgetSet::render(RenderInfo * info)
+void GadgetSet::render(RenderInfo* info)
 {
-  GadgetSet * I = this;
+  GadgetSet* I = this;
   const RenderPass pass = info->pass;
-  CRay *ray = info->ray;
+  CRay* ray = info->ray;
   auto pick = info->pick;
-  const float *color;
+  const float* color;
   PickContext context;
 
   context.object = I->Obj;
@@ -253,66 +250,69 @@ void GadgetSet::render(RenderInfo * info)
 
   color = ColorGet(I->G, I->Obj->Color);
 
-  if(pass == RenderPass::Transparent || ray || pick) {
-    PyMOLGlobals *G = I->G;
+  if (pass == RenderPass::Transparent || ray || pick) {
+    PyMOLGlobals* G = I->G;
 
-    if(ray) {
-      if(I->ShapeCGO){
-	float mat[16] = { 1.f, 0.f, 0.f, I->Coord[0], 
-                          0.f, 1.f, 0.f, I->Coord[1], 
-                          0.f, 0.f, 1.f, I->Coord[2],
-			  0.f, 0.f, 0.f, 1.f };
-	RayPushTTT(ray);
-	RaySetTTT(ray, true, mat);  /* Used to set the ray-tracing matrix,
-				       this works, but is there another way to do this? */
-	CGORenderRay(I->ShapeCGO, ray, info, color, nullptr, I->Obj->Setting.get(), nullptr);
-	RayPopTTT(ray);
+    if (ray) {
+      if (I->ShapeCGO) {
+        float mat[16] = {1.f, 0.f, 0.f, I->Coord[0], 0.f, 1.f, 0.f, I->Coord[1],
+            0.f, 0.f, 1.f, I->Coord[2], 0.f, 0.f, 0.f, 1.f};
+        RayPushTTT(ray);
+        RaySetTTT(ray, true,
+            mat); /* Used to set the ray-tracing matrix,
+                     this works, but is there another way to do this? */
+        CGORenderRay(I->ShapeCGO, ray, info, color, nullptr,
+            I->Obj->Setting.get(), nullptr);
+        RayPopTTT(ray);
       }
-    } else if(G->HaveGUI && G->ValidContext) {
+    } else if (G->HaveGUI && G->ValidContext) {
       short use_shader = (short) SettingGetGlobal_b(I->G, cSetting_use_shaders);
-      if(pick) {
-	if (!I->PickCGO && I->PickShapeCGO){
-	  CGO *convertcgo;
-	  int ok = true;
-	  convertcgo = CGOCombineBeginEnd(I->PickShapeCGO, 0);
-	  CHECKOK(ok, convertcgo);
-	  if (ok){
-	    if (use_shader){
-	      CGO *tmpCGO;
-	      tmpCGO = CGOOptimizeToVBOIndexedNoShader(convertcgo, 0);
-	      I->PickCGO = CGONew(G);
-	      CGODisable(I->PickCGO, GL_DEPTH_TEST);
-	      CGOEnable(I->PickCGO, GL_RAMP_SHADER);
-	      I->offsetPtOPick = CGOUniform3f(I->PickCGO, RAMP_OFFSETPT, (const float*)I->Coord);
-	      CGOAppendNoStop(I->PickCGO, tmpCGO);
-	      CGOFreeWithoutVBOs(tmpCGO);
-	      CGODisable(I->PickCGO, GL_RAMP_SHADER);
-	      CGOEnable(I->PickCGO, GL_DEPTH_TEST);
-	      CGOStop(I->PickCGO);
-	      I->PickCGO->use_shader = true;
-	      CGOFree(convertcgo);
-	    } else {
-	      I->PickCGO = convertcgo;
-	    }
-	  } else {
-	    CGOFree(convertcgo);
-	  }
-	}
-        if(I->PickCGO) {
-	  if (use_shader){
-	    CGORenderPicking(I->PickCGO, info, &context, I->Obj->Setting.get(), nullptr);
+      if (pick) {
+        if (!I->PickCGO && I->PickShapeCGO) {
+          CGO* convertcgo;
+          int ok = true;
+          convertcgo = CGOCombineBeginEnd(I->PickShapeCGO, 0);
+          CHECKOK(ok, convertcgo);
+          if (ok) {
+            if (use_shader) {
+              CGO* tmpCGO;
+              tmpCGO = CGOOptimizeToVBOIndexedNoShader(convertcgo, 0);
+              I->PickCGO = CGONew(G);
+              CGODisable(I->PickCGO, GL_DEPTH_TEST);
+              CGOEnable(I->PickCGO, GL_RAMP_SHADER);
+              I->offsetPtOPick = CGOUniform3f(
+                  I->PickCGO, RAMP_OFFSETPT, (const float*) I->Coord);
+              CGOAppendNoStop(I->PickCGO, tmpCGO);
+              CGOFreeWithoutVBOs(tmpCGO);
+              CGODisable(I->PickCGO, GL_RAMP_SHADER);
+              CGOEnable(I->PickCGO, GL_DEPTH_TEST);
+              CGOStop(I->PickCGO);
+              I->PickCGO->use_shader = true;
+              CGOFree(convertcgo);
+            } else {
+              I->PickCGO = convertcgo;
+            }
+          } else {
+            CGOFree(convertcgo);
+          }
+        }
+        if (I->PickCGO) {
+          if (use_shader) {
+            CGORenderPicking(
+                I->PickCGO, info, &context, I->Obj->Setting.get(), nullptr);
 #ifndef PURE_OPENGL_ES_2
-	  } else {
-	    glDisable(GL_DEPTH_TEST);
-	    glTranslatef(I->Coord[0],I->Coord[1],I->Coord[2]);
-	    CGORenderPicking(I->PickShapeCGO, info, &context, I->Obj->Setting.get(), nullptr);
-	    glTranslatef(-I->Coord[0],-I->Coord[1],-I->Coord[2]);
-	    glEnable(GL_DEPTH_TEST);
+          } else {
+            glDisable(GL_DEPTH_TEST);
+            glTranslatef(I->Coord[0], I->Coord[1], I->Coord[2]);
+            CGORenderPicking(I->PickShapeCGO, info, &context,
+                I->Obj->Setting.get(), nullptr);
+            glTranslatef(-I->Coord[0], -I->Coord[1], -I->Coord[2]);
+            glEnable(GL_DEPTH_TEST);
 #endif
-	  }
+          }
         }
       } else {
-	if (!I->StdCGO && I->ShapeCGO){
+        if (!I->StdCGO && I->ShapeCGO) {
           if (!use_shader) {
             I->StdCGO = CGOCombineBeginEnd(I->ShapeCGO);
             assert(!I->StdCGO->has_begin_end);
@@ -329,41 +329,41 @@ void GadgetSet::render(RenderInfo * info)
             assert(I->StdCGO->use_shader);
             assert(!I->StdCGO->has_begin_end);
           }
-	}
-        if(I->StdCGO) {
-	  if (use_shader){
-	    if (color)
-              CGORender(I->StdCGO, nullptr, I->Obj->Setting.get(), nullptr, info, nullptr);
+        }
+        if (I->StdCGO) {
+          if (use_shader) {
+            if (color)
+              CGORender(I->StdCGO, nullptr, I->Obj->Setting.get(), nullptr,
+                  info, nullptr);
 #ifndef PURE_OPENGL_ES_2
-	  } else {
-	    glDisable(GL_DEPTH_TEST);
-	    glTranslatef(I->Coord[0],I->Coord[1],I->Coord[2]);
-	    CGORender(I->ShapeCGO, nullptr, I->Obj->Setting.get(), nullptr, info, nullptr);
-	    glTranslatef(-I->Coord[0],-I->Coord[1],-I->Coord[2]);
-	    glEnable(GL_DEPTH_TEST);
+          } else {
+            glDisable(GL_DEPTH_TEST);
+            glTranslatef(I->Coord[0], I->Coord[1], I->Coord[2]);
+            CGORender(I->ShapeCGO, nullptr, I->Obj->Setting.get(), nullptr,
+                info, nullptr);
+            glTranslatef(-I->Coord[0], -I->Coord[1], -I->Coord[2]);
+            glEnable(GL_DEPTH_TEST);
 #endif
-	  }
+          }
         }
       }
     }
   }
 }
 
-
 /*========================================================================*/
-GadgetSet *GadgetSetNew(PyMOLGlobals * G)
+GadgetSet* GadgetSetNew(PyMOLGlobals* G)
 {
   auto I = new GadgetSet();
   I->G = G;
   return (I);
 }
 
-
 /*========================================================================*/
 GadgetSet::~GadgetSet()
 {
-  GadgetSet * I = this;
-  if(I) {
+  GadgetSet* I = this;
+  if (I) {
     CGOFree(I->PickCGO);
     CGOFree(I->PickShapeCGO);
     CGOFree(I->StdCGO);

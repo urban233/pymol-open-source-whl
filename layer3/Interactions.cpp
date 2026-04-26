@@ -286,7 +286,7 @@ DistSet* FindPiInteractions(PyMOLGlobals* G,
 
   // data structure for fast neighbor lookup
   std::unique_ptr<MapType> centers1map(
-      MapNew(G, -DEFAULT_PI_CATION_MAXIMUM_DISTANCE,
+      new MapType(G, -DEFAULT_PI_CATION_MAXIMUM_DISTANCE,
           flatten_ring_centers(rings1).data(), rings1.size(), nullptr));
 
   if (!ds) {

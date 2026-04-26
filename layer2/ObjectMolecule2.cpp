@@ -49,9 +49,7 @@
 #include"AtomInfoHistory.h"
 #include"BondTypeHistory.h"
 
-#ifdef _PYMOL_IP_PROPERTIES
 #include"Property.h"
-#endif
 
 #include "pymol/zstring_view.h"
 
@@ -3183,7 +3181,6 @@ static int ObjectMoleculeBondFromPyList(ObjectMolecule * I, PyObject * list)
   return (ok);
 }
 
-#ifdef _PYMOL_IP_PROPERTIES
 /**
  * Extract an atom property "column" as a Python list.
  *
@@ -3234,9 +3231,7 @@ static PyObject* AtomColumnAsPyList(const ObjectMolecule& mol,
 
   return list;
 }
-#endif
 
-#ifdef _PYMOL_IP_PROPERTIES
 /**
  * Restore an atom property "column" from a Python list.
  * @param mol Object molecule to update atoms in
@@ -3257,7 +3252,6 @@ static void AtomColumnFromPyList(ObjectMolecule& mol, PyObject* list,
     func(mol.AtomInfo[i], PyList_GetItem(list, i));
   }
 }
-#endif
 
 static PyObject *ObjectMoleculeAtomAsPyList(ObjectMolecule * I)
 {
@@ -3322,7 +3316,6 @@ static PyObject *ObjectMoleculeAtomAsPyList(ObjectMolecule * I)
 
     // Atom properties (not binary)
     PyObject* prop_list = nullptr;
-#ifdef _PYMOL_IP_PROPERTIES
     if (pse_export_version > 2399) {
       prop_list = AtomColumnAsPyList(*I, [G](const AtomInfoType& atom) {
         return PConvAutoNone(
@@ -3331,7 +3324,6 @@ static PyObject *ObjectMoleculeAtomAsPyList(ObjectMolecule * I)
 
       result_size = 4;
     }
-#endif
 
     result = PyList_New(result_size);
     PyList_SetItem(result, 0, PyInt_FromLong(version));
@@ -3429,7 +3421,6 @@ static int ObjectMoleculeAtomFromPyList(ObjectMolecule * I, PyObject * list)
     CPythonVal_Free(strobj);
     CPythonVal_Free(strlookupobj);
 
-#ifdef _PYMOL_IP_PROPERTIES
     if (ll > 3) {
       // Restore atom properties
       AtomColumnFromPyList(*I, PyList_GetItem(list, 3), //
@@ -3438,7 +3429,6 @@ static int ObjectMoleculeAtomFromPyList(ObjectMolecule * I, PyObject * list)
             atom.prop_id = PropertyFromPyList(G, value);
           });
     }
-#endif
 
   } else {
     // The old slow way of loading in AtomInfo, using python lists
@@ -3778,7 +3768,7 @@ bool ObjectMoleculeConnect(ObjectMolecule* I, int& nBond, pymol::vla<BondType>& 
 
     /* make a map of the local neighborhood in space */
     auto const map = std::unique_ptr<MapType>(
-        MapNew(G, (max_cutoff + MAX_VDW) * (offset_begin ? -1 : 1), //
+        new MapType(G, (max_cutoff + MAX_VDW) * (offset_begin ? -1 : 1), //
             cs->Coord, cs->NIndex));
     p_return_val_if_fail(map, false); // memory error
     MapSetupExpress(map.get()); // Don't let MapEIter call this in omp parallel

@@ -77,6 +77,16 @@ class Atom(object):
 # Secondary structure
     ss                  = ''
 
+    _atom_properties = None
+
+    @property
+    def atom_properties(self):
+        if self._atom_properties is None:
+            self._atom_properties = {}
+        return self._atom_properties
+
+    properties = atom_properties
+
     def get_mass(self):
         '''Given the chemical symbol the atomic mass is returned'''
         return atomic_mass[self.symbol]

@@ -8,8 +8,8 @@
 class PostProcess
 {
 protected:
-  std::vector<std::unique_ptr<renderTarget_t>> m_renderTargets;
-  std::vector<std::unique_ptr<textureBuffer_t>> m_textures;
+  std::vector<std::unique_ptr<RenderTargetGL>> m_renderTargets;
+  std::vector<std::unique_ptr<TextureGL>> m_textures;
 
 public:
   /**
@@ -62,7 +62,7 @@ public:
    * Note: A subclass of Postprocess shall populate their render targets in
    * its constructor else results are undefined.
    */
-  const renderTarget_t::shape_type size(std::size_t idx = 0) const noexcept;
+  const RenderTargetGL::shape_type size(std::size_t idx = 0) const noexcept;
 
   virtual ~PostProcess() = default;
 };
@@ -76,7 +76,7 @@ public:
   struct OITRT {
     enum { ACCUM = 0, REVEALAGE = 1, TOTAL = 2 };
   };
-  OIT_PostProcess(int width, int height, renderBuffer_t* rbo);
+  OIT_PostProcess(int width, int height, RenderbufferGL* rbo);
 
   void bindRT(std::size_t idx, bool clear = true) override;
 

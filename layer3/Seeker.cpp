@@ -33,6 +33,7 @@ Z* -------------------------------------------------------------------
 #include"Scene.h"
 #include"Menu.h"
 #include "Lex.h"
+#include "Util2.h"
 
 struct CSeeker : public CSeqHandler {
   bool dragging;

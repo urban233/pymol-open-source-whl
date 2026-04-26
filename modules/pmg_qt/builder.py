@@ -1020,10 +1020,10 @@ class NucleicAcidProperties:
 
 def makeFragmentButton():
     btn = QtWidgets.QPushButton()
-    btn.setAttribute(Qt.WA_LayoutUsesWidgetRect) # OS X workaround
+    btn.setAttribute(Qt.WidgetAttribute.WA_LayoutUsesWidgetRect) # OS X workaround
     btn.setSizePolicy(
-            QtWidgets.QSizePolicy.Minimum,
-            QtWidgets.QSizePolicy.MinimumExpanding)
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.MinimumExpanding)
     btn.setAutoDefault(False)
     return btn
 
@@ -1315,8 +1315,8 @@ class _BuilderPanel(QtWidgets.QWidget):
             check = QMB.question(None, 'Enable for objects?',
                     'Building "Undo" is disabled for the following objects:\n\n' +
                     '\n'.join(on_per_object) + '\n\n'
-                    'Enable "Undo" for these objects?', QMB.Yes | QMB.No)
-            if check == QMB.Yes:
+                    'Enable "Undo" for these objects?', QMB.StandardButton.Yes | QMB.StandardButton.No)
+            if check == QMB.StandardButton.Yes:
                 for oname in on_per_object:
                     self.cmd.unset('suspend_undo', oname)
 
@@ -1527,8 +1527,8 @@ class _BuilderPanel(QtWidgets.QWidget):
     def clear(self):
         QMB = QtWidgets.QMessageBox
         check = QMB.question(None, "Confirm",
-            "Really delete everything?", QMB.Yes | QMB.No)
-        if check == QMB.Yes:
+            "Really delete everything?", QMB.StandardButton.Yes | QMB.StandardButton.No)
+        if check == QMB.StandardButton.Yes:
             self.cmd.delete("all")
             self.cmd.refresh_wizard()
 

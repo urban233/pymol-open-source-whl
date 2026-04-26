@@ -27,7 +27,7 @@ CarveHelper::CarveHelper(PyMOLGlobals* G, float cutoff, const float* vertices,
     m_avoid_flag = true;
   }
 
-  m_voxelmap.reset(MapNew(G, -m_cutoff, vertices, n_vertices, nullptr));
+  m_voxelmap.reset(new MapType(G, -m_cutoff, vertices, n_vertices, nullptr));
 }
 
 /**

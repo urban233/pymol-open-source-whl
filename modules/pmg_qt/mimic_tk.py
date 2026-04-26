@@ -15,13 +15,13 @@ class _qtMessageBox:
         QMB = QtWidgets.QMessageBox
 
         variants = {
-            'askyesno': ('question', QMB.Yes, QMB.No),
-            'askquestion': ('question', QMB.Yes, QMB.No),
-            'askokcancel': ('question', QMB.Ok, QMB.Cancel),
-            'askretrycancel': ('question', QMB.Retry, QMB.Cancel),
-            'showinfo': ('information', QMB.Ok, QMB.NoButton),
-            'showerror': ('critical', QMB.Ok, QMB.NoButton),
-            'showwarning': ('warning', QMB.Ok, QMB.NoButton),
+            'askyesno': ('question', QMB.StandardButton.Yes, QMB.StandardButton.No),
+            'askquestion': ('question', QMB.StandardButton.Yes, QMB.StandardButton.No),
+            'askokcancel': ('question', QMB.StandardButton.Ok, QMB.StandardButton.Cancel),
+            'askretrycancel': ('question', QMB.StandardButton.Retry, QMB.StandardButton.Cancel),
+            'showinfo': ('information', QMB.StandardButton.Ok, QMB.StandardButton.NoButton),
+            'showerror': ('critical', QMB.StandardButton.Ok, QMB.StandardButton.NoButton),
+            'showwarning': ('warning', QMB.StandardButton.Ok, QMB.StandardButton.NoButton),
         }
 
         try:

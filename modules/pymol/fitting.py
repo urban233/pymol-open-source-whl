@@ -134,6 +134,72 @@ SEE ALSO
                 if _self._raising(r,_self): raise pymol.CmdException
                 return ( {"alignment_length": aliLen, "RMSD" : RMSD, "rotation_matrix" : rotMat } )
 
+        def usalign(mobile: str, target: str, mobile_state: int = 1,
+                target_state: int = 1, quiet: int = 1, transform: int = 1,
+                object: str | None = None, fast: int = 0,
+                *, _self=cmd) -> dict:
+            '''
+DESCRIPTION
+
+    "usalign" performs a TM-align structural superposition of two
+    protein structures. Unlike "align" and "super", it uses TM-score
+    optimization, which is length-independent and more suitable for
+    comparing proteins with different lengths or low sequence identity.
+    Only CA of proteins and C4' of nucleic acids are considered for
+    alignment.
+
+USAGE
+
+    usalign mobile, target [, mobile_state [, target_state [, quiet
+        [, transform [, object [, fast ]]]]]]
+
+ARGUMENTS
+
+    mobile = string: atom selection of mobile object
+
+    target = string: atom selection of target object
+
+    mobile_state = int: object state of mobile selection {default: 1}
+
+    target_state = int: object state of target selection {default: 1}
+
+    transform = 0/1: apply superposition transform {default: 1}
+
+    object = string: name of alignment object to create {default: None}
+
+    fast = 0/1: use fast mode with fewer iterations {default: 0}
+
+NOTES
+
+    Only guide atoms (CA for proteins, C4' for nucleic acids) are used
+    for alignment, regardless of the atom selection provided.
+
+    The TM-score ranges from 0 to 1, where 1 indicates a perfect match.
+    A TM-score above 0.5 generally indicates proteins with the same fold.
+
+    Based on the USalign algorithm by Zhang & Skolnick.
+
+EXAMPLES
+
+    fetch 1rlw 1rsy, async=0
+    usalign 1rsy, 1rlw
+
+    usalign protA, protB, object=aln
+
+SEE ALSO
+
+    align, super, cealign, pair_fit, fit
+            '''
+            mobile = selector.process(mobile)
+            target = selector.process(target)
+            if object is None:
+                object = ''
+            with _self.lockcm:
+                return _cmd.usalign(_self._COb, mobile, target,
+                    int(mobile_state) - 1, int(target_state) - 1,
+                    int(quiet), int(transform), str(object),
+                    int(fast))
+
         def extra_fit(selection='(all)', reference='', method='align', zoom=1,
                 quiet=0, *, _self=cmd, **kwargs):
             '''

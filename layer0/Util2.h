@@ -8,11 +8,11 @@
 
 #include <algorithm>
 #include <array>
+#include <sstream>
 #include <string>
 #include <vector>
 
 #include <string.h>
-#include <sstream>
 
 #include "pymol/type_traits.h"
 #include "pymol/zstring_view.h"

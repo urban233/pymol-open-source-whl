@@ -63,7 +63,7 @@ aa_map_c = [ cmd.map_sc                 , 'map object'      , ', ' ]
 aa_rep_c = [ cmd.repres_sc              , 'representation'  , ', ' ]
 aa_rem_c = [ cmd.repmasks_sc            , 'representation'  , ', ' ]
 aa_v_r_c = [ vol_ramp_sc                , 'volume ramp'     , ', ' ]
-aa_ali_e = [ Shortcut(['align', 'super', 'cealign']), 'alignment method', '']
+aa_ali_e = [ Shortcut(['align', 'super', 'cealign', 'usalign']), 'alignment method', '']
 
 def wizard_sc():
     import os, pymol.wizard
@@ -192,6 +192,7 @@ def get_auto_arg_list(self_cmd=cmd):
         'unset_bond'     : aa_set_c,
         'unset_deep'     : aa_set_c,
         'update'         : aa_sel_e,
+        'usalign'        : aa_sel_e,
         'valence'        : [ self_cmd.editing.order_sc       , 'order'           , ', ' ],
         'volume_color'   : aa_vol_c,
         'volume_panel'   : aa_vol_c,
@@ -268,6 +269,7 @@ def get_auto_arg_list(self_cmd=cmd):
         'unset_bond'     : aa_sel_c,
         'unset_deep'     : aa_obj_e,
         'update'         : aa_sel_e,
+        'usalign'        : aa_sel_e,
         'ramp_new'       : aa_map_c,
         'valence'        : aa_sel_c,
         'volume_color'   : aa_v_r_c,

@@ -1,3 +1,5 @@
+from typing import Union
+
 import pytest
 
 from pymol.shortcut import Shortcut
@@ -48,7 +50,7 @@ def test_all_keywords(sc: Shortcut):
     ],
 )
 def test_full_prefix_hits(
-    sc: Shortcut, prefixs: list[str], expected_result: str | list[str]
+    sc: Shortcut, prefixs: list[str], expected_result: Union[str, list[str]]
 ):
     for prefix in prefixs:
         result = sc.interpret(prefix)
@@ -83,12 +85,21 @@ def test_missing_key(sc: Shortcut):
 
 def test_auto_error(sc: Shortcut):
     assert None is sc.auto_err("")
-    assert None is sc.auto_err("missing_key")
+    with pytest.raises(Exception):
+        sc.auto_err("missing_key", "thing")
 
     result = sc.auto_err("co")
     assert isinstance(result, list)
     assert ["com", "com_bla", "com_xxx"] == sorted(result)
     assert "com", sc.auto_err("com")
+
+
+def test_auto_error_many_items():
+    """auto_err should raise even when there are more than 100 items."""
+    items = [f"item_{i:04d}" for i in range(200)]
+    sc = Shortcut(items)
+    with pytest.raises(Exception):
+        sc.auto_err("zzz_no_match", "item")
 
 
 def test_interpret_mode_true(sc: Shortcut):

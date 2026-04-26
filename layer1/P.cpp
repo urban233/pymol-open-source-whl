@@ -63,9 +63,7 @@ the initialization functions for these libraries on startup.
 #include "Seeker.h"
 #include "Feedback.h"
 
-#ifdef _PYMOL_IP_PROPERTIES
 #include"Property.h"
-#endif
 
 #include <memory>
 
@@ -396,8 +394,13 @@ static PyTypeObject settingWrapper_Type = {
   0,                            /* tp_basicsize */
 };
 
-#ifdef _PYMOL_IP_PROPERTIES
-#endif
+static PyMappingMethods propertyMappingMethods;
+static PyGetSetDef propertyGetSetMethods[2];
+static PyTypeObject propertyWrapper_Type = {
+  PyVarObject_HEAD_INIT(nullptr, 0)
+  "wrapper.PropertyWrapper",    /* tp_name */
+  0,                            /* tp_basicsize */
+};
 
 /**
  * If `wob` is not in a valid state (outside iterate-family context), raise
@@ -537,8 +540,40 @@ int SettingWrapperObjectAssignSubScript(PyObject *obj, PyObject *key, PyObject *
   return 0; // success
 }
 
-#ifdef _PYMOL_IP_PROPERTIES
-#endif
+/**
+ * Get all atom properties as a Python dictionary
+ */
+static
+PyObject *PropertyWrapperObjectGetAll(PyObject *obj, void *arg){
+  auto& wobj = reinterpret_cast<SettingPropertyWrapperObject*>(obj)->wobj;
+
+  if (!check_wrapper_scope(wobj))
+    return nullptr;
+
+  PyObject *dict = PyDict_New();
+  if (wobj->atomInfo->prop_id){
+    PropertyAddAllToDictItem(wobj->G, dict, wobj->atomInfo->prop_id);
+  }
+  return dict;
+}
+
+/**
+ * Python iterator over property names (keys)
+ */
+static PyObject* PropertyWrapperObjectIter(PyObject *self)
+{
+  auto& wobj = reinterpret_cast<SettingPropertyWrapperObject*>(self)->wobj;
+
+  if (!check_wrapper_scope(wobj)) {
+    return nullptr;
+  }
+
+  PyObject * items = PropertyGetNamesAsPyList(wobj->G, wobj->atomInfo->prop_id);
+  PyObject * iter = PyObject_GetIter(items);
+  Py_XDECREF(items);
+
+  return iter;
+}
 
 /**
  * Python iterator over atom or atom-state setting indices
@@ -566,8 +601,55 @@ static PyObject* SettingWrapperObjectIter(PyObject *self)
   return iter;
 }
 
-#ifdef _PYMOL_IP_PROPERTIES
-#endif
+/**
+ * Access atom-level property
+ *
+ * p[key]
+ *
+ * Return property value or None if `key` doesn't name a property
+ */
+static
+PyObject * PropertyWrapperObjectSubScript(PyObject *obj, PyObject *key){
+  auto& wobj = reinterpret_cast<SettingPropertyWrapperObject*>(obj)->wobj;
+  const char *propname;
+
+  if (!check_wrapper_scope(wobj)) {
+    return nullptr;
+  }
+
+  auto G = wobj->G;
+  PyObject *keyobj = PyObject_Str(key);
+  propname = PyString_AS_STRING(keyobj);
+  PyObject *retPyObj = PropertyGetPyObject(G, wobj->atomInfo, propname, false);
+  if (!retPyObj && wobj->cs) {
+    retPyObj = PropertyGetPyObject(G, wobj->cs, propname, false);
+  }
+  Py_DECREF(keyobj);
+  return PConvAutoNone(retPyObj);
+}
+
+/**
+ * Set an atom-level property
+ *
+ * p[key] = val
+ *
+ * Return 0 on success or -1 on failure.
+ */
+static
+int PropertyWrapperObjectAssignSubScript(PyObject *obj, PyObject *key, PyObject *val){
+  auto& wobj = reinterpret_cast<SettingPropertyWrapperObject*>(obj)->wobj;
+
+  if (!check_wrapper_scope(wobj)) {
+    return -1;
+  }
+
+  PyObject *keyobj = PyObject_Str(key);
+  int ret = -1;
+  if (PropertySet(wobj->G, wobj->atomInfo, PyString_AS_STRING(keyobj), val))
+    ret = 0; /* 0 success, -1 failure */
+  Py_DECREF(keyobj);
+  return ret;
+}
 
 /**
  * Allows attribute-like syntax for item lookups
@@ -615,9 +697,9 @@ static T const* get_member_pointer(S const* instance, size_t offset)
  * Should be equivalent to:
  *   OBAtom::GetExplicitValence() [Open Babel 3.0]
  */
-static int getExplicitValence(ObjectMolecule const* obj, size_t atm)
+unsigned getExplicitValence(ObjectMolecule const* obj, size_t atm)
 {
-  int value = 0;
+  unsigned value = 0;
 
   for (auto const& item : AtomNeighbors(obj, atm)) {
     int const order = obj->Bond[item.bond].order;
@@ -643,7 +725,7 @@ static int getExplicitValence(ObjectMolecule const* obj, size_t atm)
  *   RDKit::Atom::getDegree()
  *   OBAtom::GetExplicitDegree() [Open Babel 3.0]
  */
-static unsigned getExplicitDegree(ObjectMolecule const* obj, size_t atm)
+unsigned getExplicitDegree(ObjectMolecule const* obj, size_t atm)
 {
   return AtomNeighbors(obj, atm).size();
 }
@@ -749,12 +831,13 @@ PyObject * WrapperObjectSubScript(PyObject *obj, PyObject *key){
       ret = PIncRef(wobj->settingWrapperObject);
       break;
     case cPType_properties:
-#ifndef _PYMOL_IP_PROPERTIES
-      PyErr_SetString(P_IncentiveOnlyException,
-          "'properties/p' not supported in Open-Source PyMOL");
-#else
-      static_assert(false, "");
-#endif
+      if (!wobj->propertyWrapperObject) {
+        wobj->propertyWrapperObject =
+            static_cast<SettingPropertyWrapperObject*>(
+                PyType_GenericNew(&propertyWrapper_Type, Py_None, Py_None));
+        wobj->propertyWrapperObject->wobj = wobj;
+      }
+      ret = PIncRef(wobj->propertyWrapperObject);
       break;
     case cPType_state:
       ret = PyLong_FromLong(wobj->state);
@@ -1425,9 +1508,7 @@ WrapperObject * WrapperObjectNew() {
       PyType_GenericNew(&Wrapper_Type, Py_None, Py_None));
   wobj->dict = nullptr;
   wobj->settingWrapperObject = nullptr;
-#ifdef _PYMOL_IP_PROPERTIES
   wobj->propertyWrapperObject = nullptr;
-#endif
   return wobj;
 }
 
@@ -1833,9 +1914,7 @@ static void WrapperObjectDealloc(PyObject* self)
 {
   auto wo = static_cast<WrapperObject*>(self);
   Py_XDECREF(wo->settingWrapperObject);
-#ifdef _PYMOL_IP_PROPERTIES
   Py_XDECREF(wo->propertyWrapperObject);
-#endif
   Py_XDECREF(wo->dict);
   self->ob_type->tp_free(self);
 }
@@ -2014,12 +2093,26 @@ void PInit(PyMOLGlobals * G, int global_instance)
     settingWrapper_Type.tp_as_mapping = &settingMappingMethods;
     settingWrapper_Type.tp_getattro = PyObject_GenericGetAttrOrItem;
     settingWrapper_Type.tp_setattro = PyObject_GenericSetAttrAsItem;
-    
-#ifdef _PYMOL_IP_PROPERTIES
-#endif
+
+    propertyWrapper_Type.tp_basicsize = sizeof(SettingPropertyWrapperObject);
+    propertyWrapper_Type.tp_flags = Py_TPFLAGS_DEFAULT;
+    propertyWrapper_Type.tp_iter = &PropertyWrapperObjectIter;
+
+    propertyGetSetMethods[1].name = (char*) "";
+    propertyGetSetMethods[0].name = (char*) "all";
+    propertyGetSetMethods[0].get = &PropertyWrapperObjectGetAll;
+    propertyWrapper_Type.tp_getset = propertyGetSetMethods;
+
+    propertyMappingMethods.mp_length = nullptr;
+    propertyMappingMethods.mp_subscript = &PropertyWrapperObjectSubScript;
+    propertyMappingMethods.mp_ass_subscript = &PropertyWrapperObjectAssignSubScript;
+    propertyWrapper_Type.tp_as_mapping = &propertyMappingMethods;
+    propertyWrapper_Type.tp_getattro = PyObject_GenericGetAttrOrItem;
+    propertyWrapper_Type.tp_setattro = PyObject_GenericSetAttrAsItem;
 
     if (PyType_Ready(&Wrapper_Type) < 0
         || PyType_Ready(&settingWrapper_Type) < 0
+        || PyType_Ready(&propertyWrapper_Type) < 0
         ){
       PRINTFB(G, FB_Python, FB_Errors)
 	" PInit: Wrapper_Type, settingWrapper_Type, propertyWrapper_Type not ready\n" ENDFB(G);
@@ -2027,6 +2120,7 @@ void PInit(PyMOLGlobals * G, int global_instance)
     }
     Py_INCREF(&Wrapper_Type);
     Py_INCREF(&settingWrapper_Type);
+    Py_INCREF(&propertyWrapper_Type);
   }
   }
 

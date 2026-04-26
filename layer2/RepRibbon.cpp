@@ -290,8 +290,8 @@ Rep *RepRibbonNew(CoordSet * cs, int state)
           *(v++) = *(v1++);
 
           a2 = a1;
-        } else if((((na_mode != 1) && (ai->protons == cAN_P) &&
-                    (WordMatchExact(G, G->lex_const.P, ai->name, true))) ||
+        } else if((((na_mode != 1) &&
+                    AtomInfoIsNucBackboneTrace(LexStr(G, ai->name), ai->protons)) ||
                    ((na_mode == 1) && (ai->protons == cAN_C) &&
                     (WordMatchExact(G, "C4*", LexStr(G, ai->name), 1) ||
                      WordMatchExact(G, "C4'", LexStr(G, ai->name), 1)))) &&
@@ -654,8 +654,8 @@ void RepRibbonRenderImmediate(CoordSet * cs, RenderInfo * info)
             active = true;
             last_ai = ai;
             a2 = a1;
-          } else if((((na_mode != 1) && (ai->protons == cAN_P) &&
-                      (WordMatchExact(G, G->lex_const.P, ai->name, true))) ||
+          } else if((((na_mode != 1) &&
+                      AtomInfoIsNucBackboneTrace(LexStr(G, ai->name), ai->protons)) ||
                      ((na_mode == 1) && (ai->protons == cAN_C) &&
                       (WordMatchExact(G, "C4*", LexStr(G, ai->name), 1) ||
                        WordMatchExact(G, "C4'", LexStr(G, ai->name), 1)))) &&

@@ -1388,7 +1388,7 @@ static std::size_t OrthoCreateBgTexture(PyMOLGlobals* G)
   auto wrapT = is_repeat ? tex::wrap::REPEAT : tex::wrap::CLAMP_TO_EDGE;
   auto const bg_image_linear = SettingGet<bool>(G, cSetting_bg_image_linear);
   auto filter = bg_image_linear ? tex::filter::LINEAR : tex::filter::NEAREST;
-  auto texture = G->ShaderMgr->newGPUBuffer<textureBuffer_t>(
+  auto texture = G->ShaderMgr->newGPUBuffer<TextureGL>(
       tex::format::RGBA, tex::data_type::UBYTE, filter, filter, wrapS, wrapT);
   return texture->get_hash_id();
 }
@@ -1452,7 +1452,7 @@ void bg_grad(PyMOLGlobals* G)
         I->bgTextureID = OrthoCreateBgTexture(G);
       }
       auto texture =
-          G->ShaderMgr->getGPUBuffer<textureBuffer_t>(I->bgTextureID);
+          G->ShaderMgr->getGPUBuffer<TextureGL>(I->bgTextureID);
       texture->texture_data_2D(
           bgImage->getWidth(), bgImage->getHeight(), bgImage->bits());
       I->bgTextureNeedsUpdate = false;

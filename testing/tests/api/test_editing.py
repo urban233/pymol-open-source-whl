@@ -1,6 +1,14 @@
+import shutil
+
 from pymol import cmd
 from pymol import test_utils
 import pytest
+
+_has_pdb2pqr = bool(
+    shutil.which('pdb2pqr') or
+    shutil.which('pdb2pqr30') or
+    shutil.which('pdb2pqr_cli')
+)
 
 
 @test_utils.requires_version("3.0")
@@ -18,3 +26,170 @@ def test_look_at():
                     0.000000000,    0.000000000,    0.000000000,
                     40.000000000,  100.000000000,  -20.000000000)
     assert ref_new_view == pytest.approx(new_view)
+
+
+@pytest.mark.skipif(not _has_pdb2pqr, reason="pdb2pqr not installed")
+def test_protonate():
+    cmd.load("testing/data/1rx1.pdb")
+
+    # Apply visual settings to verify preservation
+    cmd.color("green", "1rx1")
+    cmd.show("sticks", "1rx1")
+    heavy_count = cmd.count_atoms("1rx1 and not hydro")
+
+    cmd.protonate("1rx1", pH=7.4)
+
+    # Heavy atoms preserved
+    assert cmd.count_atoms("1rx1 and not hydro") == heavy_count
+
+    # Hydrogens were added
+    assert cmd.count_atoms("1rx1 and hydro") > 0
+
+    # Visual settings preserved on heavy atoms
+    colors = set()
+    cmd.iterate("1rx1 and not hydro", "colors.add(color)", space=locals())
+    assert 3 in colors  # 3 = green color index
+
+    # At pH 7.4, most Asp carboxylates should be deprotonated
+    # (PROPKA may predict borderline pKa for some residues)
+    n_asp = cmd.count_atoms("1rx1 and not hydro and resn ASP and name OD1+OD2")
+    asp_carboxyl_h = cmd.count_atoms(
+        "1rx1 and hydro and neighbor (resn ASP and name OD1+OD2)")
+    assert asp_carboxyl_h < n_asp, \
+        "Most Asp carboxylates should be deprotonated at pH 7.4"
+
+
+@pytest.mark.skipif(not _has_pdb2pqr, reason="pdb2pqr not installed")
+def test_protonate_low_pH():
+    cmd.load("testing/data/1rx1.pdb")
+
+    cmd.protonate("1rx1", pH=2.0)
+
+    # At pH 2.0, Asp carboxylates should be protonated
+    asp_carboxyl_h = cmd.count_atoms(
+        "1rx1 and hydro and neighbor (resn ASP and name OD1+OD2)")
+    assert asp_carboxyl_h > 0, \
+        "Asp carboxylates should be protonated at pH 2.0"
+
+
+def test_protonate_no_object():
+    with pytest.raises(Exception):
+        cmd.protonate("nonexistent_object")
+
+
+def test_protonate_invalid_pH():
+    cmd.fragment("gly")
+    with pytest.raises(Exception):
+        cmd.protonate("gly", pH=-1.0)
+    with pytest.raises(Exception):
+        cmd.protonate("gly", pH=15.0)
+
+
+def test_protonate_fallback():
+    """Test textbook pKa fallback (no pdb2pqr needed)."""
+    from pymol.editing import _protonate_fallback
+
+    cmd.load("testing/data/1rx1.pdb")
+    cmd.color("green", "1rx1")
+    heavy_count = cmd.count_atoms("1rx1 and not hydro")
+
+    # Use fallback directly at pH 7.4
+    _protonate_fallback("all", "1rx1", 7.4, 0, 1, _self=cmd)
+
+    # Heavy atoms preserved
+    assert cmd.count_atoms("1rx1 and not hydro") == heavy_count
+
+    # Hydrogens were added
+    assert cmd.count_atoms("1rx1 and hydro") > 0
+
+    # Colors preserved
+    colors = set()
+    cmd.iterate("1rx1 and not hydro", "colors.add(color)", space=locals())
+    assert 3 in colors
+
+    # At pH 7.4, Asp carboxylates deprotonated (pKa 3.65)
+    asp_h = cmd.count_atoms(
+        "1rx1 and hydro and neighbor (resn ASP and name OD1+OD2)")
+    assert asp_h == 0, \
+        "Asp carboxylates should be deprotonated at pH 7.4"
+
+    # At pH 7.4, His deprotonated (pKa 6.0) — no H on ND1
+    his_nd1_h = cmd.count_atoms(
+        "1rx1 and hydro and neighbor (resn HIS and name ND1)")
+    assert his_nd1_h == 0, \
+        "His ND1 should be deprotonated at pH 7.4"
+
+    # At pH 7.4, Lys protonated (pKa 10.53) — 3H on NZ
+    lys_h = cmd.count_atoms(
+        "1rx1 and hydro and neighbor (resn LYS and name NZ)")
+    n_lys = cmd.count_atoms("1rx1 and not hydro and resn LYS and name NZ")
+    assert lys_h == n_lys * 3, \
+        "Lys NZ should have 3H (protonated) at pH 7.4"
+
+
+def test_protonate_fallback_low_pH():
+    """Test fallback at low pH — carboxylates should be protonated."""
+    from pymol.editing import _protonate_fallback
+
+    cmd.load("testing/data/1rx1.pdb")
+
+    _protonate_fallback("all", "1rx1", 2.0, 0, 1, _self=cmd)
+
+    # Asp carboxylates protonated (pH 2.0 < pKa 3.65)
+    asp_h = cmd.count_atoms(
+        "1rx1 and hydro and neighbor (resn ASP and name OD1+OD2)")
+    assert asp_h > 0, \
+        "Asp carboxylates should be protonated at pH 2.0"
+
+    # His protonated (pH 2.0 < pKa 6.0) — H on ND1
+    his_nd1_h = cmd.count_atoms(
+        "1rx1 and hydro and neighbor (resn HIS and name ND1)")
+    n_his = cmd.count_atoms("1rx1 and not hydro and resn HIS and name ND1")
+    assert his_nd1_h == n_his, \
+        "His ND1 should be protonated at pH 2.0"
+
+
+def _build_single_nuc(nuc_acid, nuc_type, obj_name, chain='A'):
+    """Helper: build a single nucleotide and return the object name.
+
+    Creates a nucleotide from scratch via attach_nuc_acid, then optionally
+    alters the chain to the requested value.
+    """
+    from pymol import editor
+    # Build from scratch (0 atoms selected) — always creates chain 'A'
+    cmd.select("sele", "none")
+    editor.attach_nuc_acid("sele", nuc_acid, nuc_type, object=obj_name, dbl_helix=False)
+    if chain != 'A':
+        cmd.alter(obj_name, f"chain='{chain}';segi='{chain}'")
+        cmd.rebuild()
+    return obj_name
+
+
+def test_attach_nuc_acid_extend_with_chain():
+    """attach_nuc_acid can extend a nucleotide that has a chain ID."""
+    from pymol import editor
+
+    obj = _build_single_nuc("atp", "RNA", "test_nuc1", chain="A")
+    initial_count = cmd.count_atoms(obj)
+
+    # Select O3' on chain A to extend
+    cmd.select("sele", f"{obj} & name O3' & chain A")
+    assert cmd.count_atoms("sele") == 1
+
+    editor.attach_nuc_acid("sele", "utp", "RNA", dbl_helix=False)
+    assert cmd.count_atoms(obj) > initial_count
+
+
+def test_attach_nuc_acid_extend_empty_chain():
+    """attach_nuc_acid should work when chain ID is empty (GH #502)."""
+    from pymol import editor
+
+    obj = _build_single_nuc("atp", "RNA", "test_nuc2", chain="")
+    initial_count = cmd.count_atoms(obj)
+
+    # Select O3' on empty chain to extend
+    cmd.select("sele", f"{obj} & name O3' & chain ''")
+    assert cmd.count_atoms("sele") == 1
+
+    editor.attach_nuc_acid("sele", "utp", "RNA", dbl_helix=False)
+    assert cmd.count_atoms(obj) > initial_count

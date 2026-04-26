@@ -1,4 +1,18 @@
-'''
+"""
+#A* -------------------------------------------------------------------
+#B* This file contains source code for the launching PyMOL.
+#C* Copyright 2025 by Schrodinger, Martin Urban.
+#D* -------------------------------------------------------------------
+#E* It is unlawful to modify or remove this copyright notice.
+#F* -------------------------------------------------------------------
+#G* Please see the accompanying LICENSE_Schrodinger file for further information.
+#H* -------------------------------------------------------------------
+#I* Additional authors of this source file include:
+#-* unknown
+#-*
+#J* This file contains added source code by Martin Urban and is indicated
+#-* by # *** BEGIN EDITED CODE SEGMENT and # *** END EDITED CODE SEGMENT
+#Z* -------------------------------------------------------------------
 PyMOL Molecular Graphics System
 Copyright (c) Schrodinger, Inc.
 
@@ -31,14 +45,27 @@ Supported ways to launch PyMOL:
     >>> # without GUI
     >>> import pymol
     >>> pymol.finish_launching(['pymol', '-cq'])
-
-'''
+"""
 
 import os
 import sys
+import pathlib
+
 import __main__
 
+
 if __name__ == '__main__':
+    # *** BEGIN EDITED CODE SEGMENT
+    # :author Martin Urban
+    # FILE_PATH = pathlib.Path(__file__).parent
+    # if 'LD_LIBRARY_PATH' not in os.environ:
+    #     os.environ['LD_LIBRARY_PATH'] = str(FILE_PATH.parent)
+    #     try:
+    #         os.execv(sys.argv[0], sys.argv)
+    #     except Exception as exc:
+    #         print('Failed re-exec:', exc)
+    #         sys.exit(1)
+    # *** END EDITED CODE SEGMENT
 
     # PyMOL launched as "python pymol/__init__.py"
     # or via execfile(".../pymol/__init__.py",...) from main
@@ -201,7 +228,12 @@ def guess_pymol_path():
 def setup_environ():
     # guess PYMOL_PATH if unset
     if 'PYMOL_PATH' not in os.environ:
-        os.environ['PYMOL_PATH'] = guess_pymol_path()
+        # *** BEGIN EDITED CODE SEGMENT
+        # :author Martin Urban
+        pymol_path = os.path.join(os.path.dirname(__file__))
+        os.environ["PYMOL_PATH"] = pymol_path
+        #os.environ['PYMOL_PATH'] = guess_pymol_path()
+        # *** END EDITED CODE SEGMENT
 
     # other PyMOL variables
     if 'PYMOL_DATA' not in os.environ:

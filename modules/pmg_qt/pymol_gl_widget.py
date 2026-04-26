@@ -63,7 +63,14 @@ class PyMOLGLWidget(BaseGLWidget):
 
     def __init__(self, parent):
         self.gui = parent
-        self.fb_scale = 1.0
+        app = QtWidgets.QApplication.instance()
+        if app:
+            screen = app.primaryScreen()
+            # use the screen's devicePixelRatio as framebuffer scale factor necessary for PyQt6 high DPI support
+            self.fb_scale = screen.devicePixelRatio()
+        else:
+            # fallback if no QApplication instance is available
+            self.fb_scale = 1.0
 
         # OpenGL context setup
         if USE_QOPENGLWIDGET:

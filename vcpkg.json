@@ -1,0 +1,20 @@
+{
+  "name": "pymol-oss-dependencies",
+  "version": "1.0.0",
+  "builtin-baseline": "d172727ef04337ef0021640302a9a3a91ad17414",
+  "dependencies": [
+    {
+      "name": "freetype",
+      "version>=": "2.13.3"
+    },
+    "glew",
+    "glm",
+    "libpng",
+    {
+      "name": "libxml2",
+      "default-features": false
+    },
+    "opengl",
+    "netcdf-c"
+  ]
+}

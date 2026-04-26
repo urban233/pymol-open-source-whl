@@ -1,23 +1,371 @@
-[![CI](https://github.com/schrodinger/pymol-open-source/workflows/CI/badge.svg)](https://github.com/schrodinger/pymol-open-source/actions)
+# Unofficial PyMOL(TM) Python wheel files
+[![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-blue.svg)](https://GitHub.com/urban233/pymol-open-source-whl/graphs/commit-activity)
+[![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
+[![GitHub issues](https://img.shields.io/github/issues/urban233/pymol-open-source-whl)](https://GitHub.com/urban233/pymol-open-source-whl/issues/)
 
-<img src="./data/pymol/icons/icon2.svg" height="100" align="right" />
+### Supported Platforms
 
-# Open-Source PyMOL
+![Windows](https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)
+![macOS](https://img.shields.io/badge/mac%20os-000000?style=for-the-badge&logo=macos&logoColor=F0F0F0)
+![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)
 
-[Open-source foundation](https://pymol.org/#opensource) of the user-sponsored PyMOL molecular visualization system.
+This repository offers **unofficial** binary wheels for the open-source version of PyMOL(TM)
+for **all major** operating systems.
+These wheel files are intended for use in a Python project.
+If you are searching for PyMOL as ready-to-use application go to 
+this repository: [pymol-open-source-setup](https://github.com/kullik01/pymol-open-source-setup).
 
-The commercial PyMOL product ("Incentive PyMOL") with maintenance and support is available from https://pymol.org
+## Contents of this document
+* [About PyMOL](#About-PyMOL)
+* [Contents of this repository](#Contents-of-this-repository)
+    * [Scripts](#Scripts)
+    * [Pre-built](#Pre-built)
+    * [Vcpkg](Vcpkg)
+* [Build wheel file](#Build-wheel-file)
+* [From source](#From-source)
+    * [Prerequisites](#Prerequisites)
+    * [Step-by-step guide](#Step-by-step-guide)
+* [License](#License)
+* [Acknowledgements](#Acknowledgements)
+<!--* [References and useful links](#References-and-useful-links) -->
 
-## Installation
+## About PyMOL
+[PyMOL™](https://pymol.org/) is a powerful visualization software for rendering and animating 3D molecular structures. PyMOL is a trademark of Schrödinger, LLC.
 
-See [INSTALL](INSTALL).
+Please note that the files provided here are **unofficial**. They are informal, unrecognized, and unsupported, offered for testing and evaluation purposes only. No warranty or liability is provided, and the software is made available "as-is."
 
-## Contributing
+## Contents of this repository
+### Scripts
+There is one Python script that is used for building PyMOL specific shader files.
 
-See [DEVELOPERS](DEVELOPERS).
+### Pre-built
+To enable the direct build of a ready-to-use wheel file, a pre-built
+`_cmd` module is already compiled and will be used in the wheel build process
+if no self built one can be found.
+Furthermore, the libGL library is also provided to make the build process
+easier and less error-prone.
+
+### Vcpkg
+To make the build process of the `_cmd` module as easy and convenient as
+possible, the vcpkg package manager is used. The package manager should
+handle all build dependencies PyMOL needs.
+
+## Install
+To install PyMOL run:
+```shell
+pip install pymol-open-source-whl
+```
+
+## Build wheel file
+To build the wheel file (based on the provided pre-built `_cmd` module), follow these steps (the working directory is the repository root directory):
+
+1. Set up a Python virtual environment under the project root directory.
+
+2. Install all requirements using the requirements.txt:
+    ```shell
+    pip install -r requirements.txt
+    ```
+
+3. Set up the build environment by running:
+   ```shell
+   ./win_automator.bat setup dev-env
+   ```
+
+4. Build the wheel file using the pre-built `_cmd` module
+    ```shell
+    python -m build
+    ```
+   After a successful build the wheel file can be found under the `dist/` folder.
+
+## From source
+The following information is about building only the `_cmd` module from source.
+
+### Prerequisites
+- CMake
+    - **Be aware**: Add the cmake to your PATH variable. Check by running `cmake --version`
+- Clang & Clang++:
+    - Xcode developer tools
+
+### Step-by-step guide
+1. Load the CMake project (e.g. in PyCharm right-click on the CMakeLists.txt file
+   and select `Load CMake Project`)
+2. Create a `Release` CMake build profile (e.g. in PyCharm click on the CMake
+   icon in the bottom left panel and click on the `Gear icon > CMake Settings`)
+3. Add the following line to your CMake build profile:
+    ```shell
+    -DCMAKE_TOOLCHAIN_FILE=$CMakeProjectDir$/vendor/vcpkg/scripts/buildsystems/vcpkg.cmake
+    ```
+4. Build the project.
 
 ## License
-
 Copyright (c) [Schrodinger, LLC](https://www.schrodinger.com/)
 
 Published under a BSD-like license, see [LICENSE](LICENSE).
+
+## Acknowledgements
+**Schrödinger** for being the driving force behind the continued development of PyMOL after Warren's passing, ensuring that the open-source version remained alive and well.
+
+**NOTE**: the following list has not been updated since Fall 2003.  
+Since then, the PyMOL effort has grown to such an extent that it is no longer
+practical to recognize everyone individually.  Fortunately, a public
+record of participation exists and can be appreciated on the internet,
+and especially via the PyMOL mailing list archives.  Suffice it to say
+that the PyMOL user community now numbers well into the thousands and
+includes scientists, students, and educators worldwide, spread
+throughout academia and the biotechnology and pharmaceutical
+industries.  Though DeLano Scientific LLC specifically supports and
+maintains the PyMOL code base, the project can only continue to
+succeed through the sponsorship and participation of the broader
+community.
+
+**Founder and Principal Author**:
+
+      Warren L. DeLano 
+
+Major Authors (5000+ lines of code):
+
+      Ralf W. Grosse-Kunstleve (SGLite Module)
+
+Minor Authors (500+ lines of code):
+
+      Scott Dixon (Metaphorics CEX support)
+      Filipe Maia (Slice Objects)
+
+Other Contributors: These are the people who have gone out of
+their way to help the project with their ideas, actions,
+advice, hardware donations, testing, information, sponsorship,
+peer support, or code snippets.
+
+      Daan van Aalten
+      Paul Adams 
+      Stephen Adler
+      Jun Aishima 
+      Dennis Allison
+      Ricardo Aparicio
+      Daniel Appelman   
+      Diosdado "Rey" Banatao
+      Michael Banck
+      Ulrich Baumann
+      Joseph Becker
+      Balaji Bhyravbhatla
+      Jeff Bizzaro
+      Jeff Blaney 
+      Juergen Bosch 
+      Michael Bower
+      Sarina Bromberg
+      Axel Brunger
+      Robert Campbell
+      Bronwyn Carlisle 
+      Duilio Cascio
+      Julien Chiron 
+      Shawn Christensen
+      Scott Classen
+      David Cooper
+      Larry Coopet
+      Jacob Corn
+      Ben Cornett
+      Andrew Dalke 
+      Koen van der Drift 
+      Harry Dailey
+      Byron DeLaBarre
+      Bill DeGrado
+      Thomas Earnest
+      Nathaniel Echols
+      John Eksterowicz
+      Erik Evensen
+      David Fahrney
+      Tim Fenn
+      Thierry Fischmann
+      Michael Ford
+      Esben Peter Friis
+      Kevin Gardner
+      R. Michael Garavito
+      John Gerig
+      Jonathan Greene
+      Michael Goodman  
+      Joel Harp
+      Reece Hart
+      Richard Hart
+      Peter Haebel
+      Matt Henderson
+      Douglas Henry 
+      Possu Huang 
+      Uwe Hoffmann
+      Jenny Hinshaw
+      Carly Huitema
+      Bjorn Kauppi
+      Greg Landrum
+      Robert Lawrence Kehrer 
+      Tom Lee
+      Eugen Leitl
+      Ken Lind
+      Jules Jacobsen
+      Luca Jovine
+      Andrey Khavryuchenko
+      David Konerding
+      Greg Landrum
+      Michael Love 
+      Tadashi Matsushita
+      Genevieve Matthews 
+      Gerry McDermott 
+      Robert McDowell
+      Gustavo Mercier      
+      Naveen Michaud-Agrawal
+      Aaron Miller
+      Holly Miller
+      Tim Moore
+      Kelley Moremen
+      Hideaki Moriyama
+      Nigel Moriarty 
+      Geoffrey Mueller
+      Cameron Mura
+      Florian Nachon 
+      Hanspeter Niederstrasser 
+      Michael Nilges
+      Hoa Nguyen
+      Shoichiro Ono
+      Chris Oubridge
+      Andre Padilla
+      Jay Pandit
+      Ezequiel "Zac" Panepucci
+      Robert Phillips
+      Hans Purkey
+      Rama Ranganathan
+      Michael Randal
+      Daniel Ricklin 
+      Ian Robinson
+      Eric Ross
+      Kristian Rother
+      Marc Saric
+      Bill Scott
+      Keana Scott
+      Denis Shcherbakov
+      Goede Schueler
+      Paul Sherwood
+      Ward Smith
+      John Somoza
+      David van der Spoel
+      Paul Sprengeler
+      Matt Stephenson 
+      Peter Stogios
+      John Stone
+      Charlie Strauss
+      Michael Summers
+      Brian Sutton
+      Hanna and Abraham Szoke
+      Rod Tweten
+      Andras Varadi
+      Scott Walsh
+      Pat Walters
+      Mark White
+      Michael Wilson
+      Dave Weininger
+      Chris Wiesmann
+      Charles Wolfus
+      Richard Xie
+
+Miscellaneous Code Snippets Lifted From:
+
+      Thomas Malik (fast matrix-multiply code)
+      John E. Grayson (Author of "Python and Tkinter")
+      Doug Hellmann (Wrote code that JEG later modified.)
+
+Open-Source "Enablers" (essential, but not directly involved):
+
+      Brian Paul (Mesa)
+      Mark Kilgard (GLUT)
+      Guido van Rossum (Python)
+      Linus Torvalds (Linux Kernel)
+
+      Precision Insight (DRI)
+      The XFree86 Project (Free Windowing System)
+      VA Linux (CVS Hosting)
+      Richard Stallman/Free Software Foundation (GNU Suite)
+      The unknown authors of EISPACK (Linear Algebra)
+
+Graphics Technology "Enablers" (essential!)
+
+      3dfx (RIP)
+      nVidia 
+      ATI
+
+### Specific Acknowledgments:
+
+* Thanks to Joni W. Lam for making the business work.
+
+* Thanks to John Stone and John Furr for being such excellent
+  colleagues.
+
+* Thanks to Ragu Bharadwaj and Marcin Joachimiak for Java expertise
+  and encouragement.
+
+* Thanks to Apple Computer for continued encouragement, assistance,
+  and HLAs in support of Mac development.  Thanks especially to
+  Robert Kehrer for creating so many fun opportunities over the years.
+
+* Thanks to Aaron Miller (GlaxoSmithKline) for a continuous stream of
+  thoughtful opinions and suggestions.
+
+* Thanks to Dave Weininger for suggesting the "roving" feature and for
+  being such an inspirational friend and mentor.
+
+* Thanks to Matt Hahn and Dave Rogers for proving that it can also be
+  done, again.
+
+* Thanks to Mick Savage for providing experienced practical advice on
+  the marketing of scientific software.
+
+* Thanks to Ian Matthew for 3D experience and perspective.
+
+* Thanks for Jeff Blaney for numerous insightful discussions.
+
+* Thanks to Elizabeth Pehrson for making this a team effort.
+
+* Thanks to Erin Bradley for schooling in focus and vision.
+
+* Thanks to Vera Povolona for catalytic clarity and introspection.
+
+* Thanks to Anthony Nichols for proving that it can be done, yet again.
+
+* Thanks to Thompson Doman for timely Open-Source validation.
+
+* Thanks to Manfred Sippl for making it all seem so simple.
+
+* Thanks to Kristian Rother for all his excellent work building on the
+  PyMOL foundation, and in helping others learn to use the software.
+
+* Thanks to Dave Weininger, Scott Dixon, Roger Sayle, Andrew Dalke,
+  Anthony Nichols, Dick Cramer, and David Miller, as well as rest of
+  the Daylight and OpenEye teams for thoughtful discussions on PyMOL
+  and open-source software during my 2002 pilgrimage to Sante Fe, NM.
+
+* Thanks to Ralf Grosse-Kunstleve for his contribution of the "sglite"
+  space group and symmetry handling module.
+
+* Thanks to the scientists and management of Sunesis Pharmaceuticals
+  for supporting PyMOL development since program inception.
+
+* Thanks to the Computational Crystallography Initiative (LBNL)
+  developers for their encouragement, ideas, and support.
+
+* Thanks to Scott Walsh for being the first individual to provide
+  financial support for PyMOL.
+
+* Thanks to the hundreds of individuals, companies, and institutions
+  that have provided financial support for the project.
+
+* Thanks to Brian Paul and the Precision Insight team for development
+  of Mesa/DRI which greatly assisted in the early development of PyMOL.
+
+* Thanks to Michael Love for the first major outside port of PyMOL
+  (to GNU-Darwin/OSX) and for believing in the cause.
+
+* Thanks for Paul Sherwood for making a concerted effort to develop
+  using PyMOL long before the software and vision had matured.
+
+* Thanks to Jay Ponder for thoughtful email discussions on Tinker and
+  the role of open-source scientific software.
+
+* Thanks to hundreds of PyMOL users for the many forms of feedback,
+  bug sightings, and encouragement they've provided.

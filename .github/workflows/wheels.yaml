@@ -1,0 +1,200 @@
+#A* -------------------------------------------------------------------
+#B* This file contains source code for running a GitHub automation
+#-* related to the build process of the PyMOL computer program
+#C* Copyright 2025 by Martin Urban.
+#D* -------------------------------------------------------------------
+#E* It is unlawful to modify or remove this copyright notice.
+#F* -------------------------------------------------------------------
+#G* Please see the accompanying LICENSE file for further information.
+#H* -------------------------------------------------------------------
+#I* Additional authors of this source file include:
+#-*
+#-*
+#-*
+#Z* -------------------------------------------------------------------
+name: Build Wheels
+
+on:
+  push:
+    branches:
+      - scikit_build_core
+
+env:
+  VCPKG_ROOT: ${{ github.workspace }}/vendor/vcpkg
+
+jobs:
+  # ----- Windows build section
+  build-windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        win_arch: ['x86', 'x64']
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Initialize vcpkg
+        run: |
+          git clone https://github.com/Microsoft/vcpkg.git vendor/vcpkg
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Create virtual environment
+        run: |
+          python -m venv .venv
+          call .venv\Scripts\activate.bat
+          python -m pip install --upgrade setuptools pip wheel build cibuildwheel 
+          python -m pip install delvewheel
+          python -m pip install -r requirements.txt
+        shell: cmd
+
+      - name: Bootstrap vcpkg
+        run: ${{ env.VCPKG_ROOT }}/bootstrap-vcpkg.bat -disableMetrics
+
+      - name: Last build environment setup steps
+        run: |
+          call .venv\Scripts\activate.bat
+          python automations\my_automator.py setup dev-env
+        shell: cmd
+
+      - name: Build x86 C extension
+        if: ${{ matrix.win_arch == 'x86' }}
+        run: |
+          ${{ env.VCPKG_ROOT }}/vcpkg install --triplet=x86-windows-static
+          call .venv\Scripts\activate.bat
+          set WIN_ARCH=x86
+          cibuildwheel . --platform windows --archs x86
+        shell: cmd
+
+      - name: Build x64 C extension
+        if: ${{ matrix.win_arch == 'x64' }}
+        run: |
+          ${{ env.VCPKG_ROOT }}/vcpkg install --triplet=x64-windows-static
+          call .venv\Scripts\activate.bat
+          set WIN_ARCH=x64
+          cibuildwheel . --platform windows --archs AMD64
+        shell: cmd
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PyMOL-wheel-Windows-${{ matrix.win_arch }}-3.11
+          path: ./wheelhouse/*.whl
+  # --- end
+
+  # ----- macOS build section
+  build-macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ macos-13, macos-14 ]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Initialize vcpkg
+        run: |
+          git clone https://github.com/Microsoft/vcpkg.git vendor/vcpkg
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Create virtual environment
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          python -m pip install wheel setuptools cibuildwheel 
+          python -m pip install -r requirements.txt
+
+      - name: Bootstrap vcpkg
+        run: ${{ env.VCPKG_ROOT }}/bootstrap-vcpkg.sh -disableMetrics
+
+      - name: Install vcpkg dependencies
+        run: |
+          ${{ env.VCPKG_ROOT }}/vcpkg install
+
+      - name: Last build environment setup steps
+        run: |
+          source .venv/bin/activate
+          python automations/my_automator.py setup dev-env
+
+      - name: Build C extension
+        run: |
+          source .venv/bin/activate
+          python automations/my_automator.py setup dev-env
+          export ARCH=$(uname -m)
+          export MACOSX_DEPLOYMENT_TARGET=12.0
+          cibuildwheel .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PyMOL-wheel-${{ matrix.os }}-3.11
+          path: ./wheelhouse/*.whl
+  # --- end
+
+  # ----- GNU Linux build section
+  build-gnu-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install git build-essential libxmu-dev libxi-dev libgl-dev libglew-dev libpng-dev libfreetype6-dev libxml2-dev libmsgpack-dev libglm-dev libnetcdf-dev linux-libc-dev autoconf perl
+
+      - name: Initialize vcpkg
+        run: |
+          git clone https://github.com/Microsoft/vcpkg.git vendor/vcpkg
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Create virtual environment
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          python -m pip install wheel setuptools cibuildwheel 
+          python -m pip install -r requirements.txt
+
+      - name: Bootstrap vcpkg
+        run: ${{ env.VCPKG_ROOT }}/bootstrap-vcpkg.sh -disableMetrics
+
+      - name: Install vcpkg dependencies
+        run: |
+          ${{ env.VCPKG_ROOT }}/vcpkg install
+
+      - name: Last build environment setup steps
+        run: |
+          source .venv/bin/activate
+          python automations/my_automator.py setup dev-env
+
+      - name: Build C extension
+        run: |
+          source .venv/bin/activate
+          python automations/my_automator.py setup dev-env
+          cibuildwheel .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PyMOL-wheel-GNU-Linux-3.11
+          path: ./wheelhouse/*.whl
+  # --- end

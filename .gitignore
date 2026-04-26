@@ -1,5 +1,13 @@
 *.pyc
 *.d
 generated
-build
-.vscode
+/build/
+/.vscode/
+# Custom excludes
+/.idea/
+/.venv/
+/cmake-build-debug/
+/cmake-build-release/
+/vcpkg_installed/
+/vendor/
+/dist/

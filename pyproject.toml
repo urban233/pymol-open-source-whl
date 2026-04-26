@@ -1,54 +1,74 @@
+[build-system]
+requires = [
+  "scikit-build-core",
+  "setuptools>=69.2.0",
+  "numpy>=2.0"
+]
+build-backend = "scikit_build_core.build"
+
 [project]
-name = "pymol"
+name = "pymol-open-source-whl"
 readme = "README.md"
-requires-python = ">=3.9"
-dynamic=["version"]
+version = "3.1.0.4a1+1"
+requires-python = ">=3.10"
 license = {file = "LICENSE"}
-description = """
-PyMOL is a Python-enhanced molecular graphics tool.
-It excels at 3D visualization of proteins, small molecules, density,
-surfaces, and trajectories. It also includes molecular editing,
-ray tracing, and movies. Open Source PyMOL is free to everyone!
-"""
+#description = """
+#PyMOL is a Python-enhanced molecular graphics tool.
+#It excels at 3D visualization of proteins, small molecules, density,
+#surfaces, and trajectories. It also includes molecular editing,
+#ray tracing, and movies. Open Source PyMOL is free to everyone!
+#"""
 authors = [
-  {name = "Schrodinger", email = "pymol-users@lists.sourceforge.net"},
+  {name = "Martin Urban", email = "martin.urban@studmail.w-hs.de"},
 ]
 dependencies = [
-  "numpy>=2.0",
-]
-
-[build-system]
-build-backend = "backend"
-backend-path = ["_custom_build"]
-requires = [
-  "cmake>=3.13.3",
-  "numpy>=2.0",
-  "setuptools>=69.2.0",
+  "numpy==1.26.4",
 ]
 
 [project.optional-dependencies]
 dev = [
-  "biopython>=1.80",
-  "msgpack==1.0.8",
-  "pillow==11.1.0",
-  "PySide6==6.8.1",
+  "pillow==10.3.0",
   "pytest==8.2.2",
-  "requests==2.32.3",
 ]
 
 [project.urls]
-Homepage = "https://pymol.org"
-Documentation = "https://pymol.org/dokuwiki"
-Repository = "https://github.com/schrodinger/pymol-open-source"
-"Bug Tracker" = "https://github.com/schrodinger/pymol-open-source/issues"
-Changelog = "https://github.com/schrodinger/pymol-open-source/blob/master/ChangeLog"
+# Homepage = "https://pymol.org"
+Documentation = "https://pymolwiki.org/index.php/Main_Page"
+Repository = "https://github.com/urban233/pymol-open-source-whl"
 
-[project.scripts]
-pymol = "pymol:launch"
+[tool.scikit-build]
+build.verbose = true
+logging.level = "DEBUG"
+cmake.args = [
+  "-DCMAKE_TOOLCHAIN_FILE=./vendor/vcpkg/scripts/buildsystems/vcpkg.cmake",
+  "-DVCPKG_INSTALLED_DIR=./vcpkg_installed",
+  "-DBUILD_PYTHON_EXTENSION=ON"
+]
+sdist.include = [
+  "build",
+  "pre-built",
+  "vcpkg_installed",
+  "vendor/vcpkg"
+]
+[tool.scikit-build.wheel.packages]
+chempy = "modules/chempy"
+pmg_qt = "modules/pmg_qt"
+pmg_tk = "modules/pmg_tk"
+pymol = "modules/pymol"
+pymol2 = "modules/pymol2"
+"pymol/data" = "data"
 
-[tool.setuptools.packages.find]
-where = ["modules"]
+[tool.cibuildwheel]
+build = ["cp310-*", "cp311-*", "cp312-*"]
+#build = ["cp311-*"] # Only for debug purposes
+# Skip Linux 32-bit builds and AlpineLinux builds
+skip = ["*-manylinux_i686", "*musllinux*"]
+test-requires = ["pytest", "importlib_metadata"]
+test-command = "pytest {project}/tests/"
 
-[tool.setuptools.package-data]
-pmg_qt = ["forms/*.ui"]
+[tool.cibuildwheel.environment]
+VCPKG_ROOT = "{project}/vendor/vcpkg"
 
+[tool.cibuildwheel.linux]
+before-all = "yum install -y perl perl-IPC-Cmd zip"
+manylinux-x86_64-image = "manylinux_2_28"

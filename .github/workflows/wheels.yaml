@@ -15,9 +15,14 @@
 name: Build Wheels
 
 on:
+  pull_request:
+    branches: [production]
+  workflow_dispatch:
   push:
-    branches:
-      - update-to-3.0.2.X
+    tags: ["v*"]
+
+permissions:
+  contents: read
 
 env:
   VCPKG_ROOT: ${{ github.workspace }}/vendor/vcpkg
@@ -99,7 +104,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PyMOL-wheel-Windows-${{ matrix.win_arch }}-3.11
+          name: PyMOL-wheel-Windows-${{ matrix.win_arch }}
           path: ./wheelhouse/*.whl
   # --- end
 
@@ -109,7 +114,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ macos-13, macos-14 ]
+        os: [ macos-15-intel, macos-15 ]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
@@ -168,7 +173,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PyMOL-wheel-${{ matrix.os }}-3.11
+          name: PyMOL-wheel-${{ matrix.os }}
           path: ./wheelhouse/*.whl
   # --- end
 
@@ -235,6 +240,86 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PyMOL-wheel-GNU-Linux-3.11
+          name: PyMOL-wheel-GNU-Linux
           path: ./wheelhouse/*.whl
   # --- end
+
+  release-integrity:
+    name: Validate release distributions
+    needs: [build-windows, build-macos, build-gnu-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Download wheel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: PyMOL-wheel-*
+          path: dist
+          merge-multiple: true
+
+      - name: Install distribution validation tools
+        run: python -m pip install --disable-pip-version-check twine
+
+      - name: Validate distribution metadata
+        run: python -m twine check dist/*.whl
+
+      - name: Verify release metadata and wheel coverage
+        run: python scripts/verify_release.py --dist dist
+
+      - name: Verify release tag version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: python scripts/verify_release.py --dist dist --tag "$GITHUB_REF_NAME"
+
+      - name: Upload validated distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: pypi-distributions
+          path: dist/*.whl
+          if-no-files-found: error
+
+  attest:
+    name: Attest release distributions
+    needs: release-integrity
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      attestations: write
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download validated distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: pypi-distributions
+          path: dist
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/*.whl
+
+  publish:
+    name: Publish distributions to PyPI
+    needs: attest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      id-token: write
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/pymol-open-source-whl
+    steps:
+      - name: Download validated distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: pypi-distributions
+          path: dist
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

@@ -15,7 +15,6 @@ from pathlib import Path
 PROJECT_NAME = "pymol-open-source-whl"
 PYTHON_TAGS = {f"cp{minor}" for minor in range(10, 15)}
 PLATFORM_FAMILIES = {
-    "windows-x86",
     "windows-x64",
     "macos-intel",
     "macos-arm64",

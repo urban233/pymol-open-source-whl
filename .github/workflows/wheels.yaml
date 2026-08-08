@@ -37,7 +37,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        win_arch: ['x86', 'x64']
+        win_arch: ['x64']
     runs-on: windows-latest
     steps:
       - name: Checkout repository
@@ -83,14 +83,6 @@ jobs:
 
       - name: Last build environment setup steps
         run: uv run --locked --no-sync python pymakefile.py setup_dev_env
-        shell: cmd
-
-      - name: Build and test x86 wheels
-        if: ${{ matrix.win_arch == 'x86' }}
-        run: |
-          ${{ env.VCPKG_ROOT }}/vcpkg install --triplet=x86-windows-static
-          set WIN_ARCH=x86
-          uv run --locked --no-sync python pymakefile.py build_wheels platform=windows archs=x86
         shell: cmd
 
       - name: Build and test x64 wheels
@@ -287,7 +279,10 @@ jobs:
   attest:
     name: Attest release distributions
     needs: release-integrity
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: >
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
     permissions:
       attestations: write
       id-token: write

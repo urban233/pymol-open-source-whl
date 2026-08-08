@@ -21,7 +21,7 @@ on:
 
 env:
   VCPKG_ROOT: ${{ github.workspace }}/vendor/vcpkg
-  VCPKG_COMMIT: 0d5cae153065957df7f382de7c1549ccc88027e5
+  VCPKG_COMMIT: 9942fb5f996ea431c5ed8fb8d2a53f31d08df62e
 
 jobs:
   # ----- Windows build section

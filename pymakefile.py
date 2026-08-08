@@ -378,7 +378,7 @@ def _main() -> None:
 
 # <editor-fold desc="Tasks">
 _PROJECT_ROOT = pathlib.Path(__file__).resolve().parent
-_VCPKG_COMMIT = "0d5cae153065957df7f382de7c1549ccc88027e5"
+_VCPKG_COMMIT = "9942fb5f996ea431c5ed8fb8d2a53f31d08df62e"
 
 
 def _vcpkg_executable(vcpkg_dir: pathlib.Path) -> pathlib.Path:

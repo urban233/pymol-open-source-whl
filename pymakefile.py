@@ -378,6 +378,7 @@ def _main() -> None:
 
 # <editor-fold desc="Tasks">
 _PROJECT_ROOT = pathlib.Path(__file__).resolve().parent
+_VCPKG_COMMIT = "0d5cae153065957df7f382de7c1549ccc88027e5"
 
 
 def _vcpkg_executable(vcpkg_dir: pathlib.Path) -> pathlib.Path:
@@ -436,6 +437,7 @@ def setup_dev_env() -> None:
       f'git clone https://github.com/microsoft/vcpkg.git "{vcpkg_dir}"',
       cwd=_PROJECT_ROOT,
     )
+    run(f'git checkout {_VCPKG_COMMIT}', cwd=vcpkg_dir)
 
   if os.name == "nt":
     bootstrap = vcpkg_dir / "bootstrap-vcpkg.bat"

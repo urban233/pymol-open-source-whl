@@ -21,14 +21,14 @@ on:
 
 env:
   VCPKG_ROOT: ${{ github.workspace }}/vendor/vcpkg
+  VCPKG_COMMIT: 0d5cae153065957df7f382de7c1549ccc88027e5
 
 jobs:
   # ----- Windows build section
   build-windows:
+    name: Windows (${{ matrix.win_arch }})
     env:
       WIN_ARCH: ${{ matrix.win_arch }}
-      CMAKE_GENERATOR: Visual Studio 17 2022
-      CMAKE_GENERATOR_TOOLSET: v143
     strategy:
       fail-fast: false
       matrix:
@@ -46,16 +46,28 @@ jobs:
       - name: Initialize vcpkg
         run: |
           git clone https://github.com/Microsoft/vcpkg.git vendor/vcpkg
+          git -C vendor/vcpkg checkout ${{ env.VCPKG_COMMIT }}
+
+      - name: Cache vcpkg downloads
+        uses: actions/cache@v4
+        with:
+          path: vendor/vcpkg/downloads
+          key: vcpkg-downloads-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-downloads-${{ env.VCPKG_COMMIT }}-
+
+      - name: Cache vcpkg installed packages
+        uses: actions/cache@v4
+        with:
+          path: vcpkg_installed
+          key: vcpkg-installed-${{ runner.os }}-${{ matrix.win_arch }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-installed-${{ runner.os }}-${{ matrix.win_arch }}-${{ env.VCPKG_COMMIT }}-
 
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
-        with:
-          vs-version: '[17.0,18.0)'
 
       - name: Sync Python environment
         run: uv sync --locked --no-install-project
@@ -68,7 +80,7 @@ jobs:
         run: uv run --locked --no-sync python pymakefile.py setup_dev_env
         shell: cmd
 
-      - name: Build x86 C extension
+      - name: Build and test x86 wheels
         if: ${{ matrix.win_arch == 'x86' }}
         run: |
           ${{ env.VCPKG_ROOT }}/vcpkg install --triplet=x86-windows-static
@@ -76,7 +88,7 @@ jobs:
           uv run --locked --no-sync python pymakefile.py build_wheels platform=windows archs=x86
         shell: cmd
 
-      - name: Build x64 C extension
+      - name: Build and test x64 wheels
         if: ${{ matrix.win_arch == 'x64' }}
         run: |
           ${{ env.VCPKG_ROOT }}/vcpkg install --triplet=x64-windows-static
@@ -93,6 +105,7 @@ jobs:
 
   # ----- macOS build section
   build-macos:
+    name: macOS (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -110,6 +123,23 @@ jobs:
       - name: Initialize vcpkg
         run: |
           git clone https://github.com/Microsoft/vcpkg.git vendor/vcpkg
+          git -C vendor/vcpkg checkout ${{ env.VCPKG_COMMIT }}
+
+      - name: Cache vcpkg downloads
+        uses: actions/cache@v4
+        with:
+          path: vendor/vcpkg/downloads
+          key: vcpkg-downloads-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-downloads-${{ env.VCPKG_COMMIT }}-
+
+      - name: Cache vcpkg installed packages
+        uses: actions/cache@v4
+        with:
+          path: vcpkg_installed
+          key: vcpkg-installed-${{ matrix.os }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-installed-${{ matrix.os }}-${{ env.VCPKG_COMMIT }}-
 
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
@@ -129,7 +159,7 @@ jobs:
       - name: Last build environment setup steps
         run: ARCH=$(uname -m) uv run --locked --no-sync python pymakefile.py setup_dev_env
 
-      - name: Build C extension
+      - name: Build and test wheels
         run: |
           export ARCH=$(uname -m)
           export MACOSX_DEPLOYMENT_TARGET=12.0
@@ -144,6 +174,7 @@ jobs:
 
   # ----- GNU Linux build section
   build-gnu-linux:
+    name: GNU/Linux (x64)
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
@@ -162,6 +193,23 @@ jobs:
       - name: Initialize vcpkg
         run: |
           git clone https://github.com/Microsoft/vcpkg.git vendor/vcpkg
+          git -C vendor/vcpkg checkout ${{ env.VCPKG_COMMIT }}
+
+      - name: Cache vcpkg downloads
+        uses: actions/cache@v4
+        with:
+          path: vendor/vcpkg/downloads
+          key: vcpkg-downloads-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-downloads-${{ env.VCPKG_COMMIT }}-
+
+      - name: Cache vcpkg installed packages
+        uses: actions/cache@v4
+        with:
+          path: vcpkg_installed
+          key: vcpkg-installed-${{ runner.os }}-x64-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-installed-${{ runner.os }}-x64-${{ env.VCPKG_COMMIT }}-
 
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
@@ -181,7 +229,7 @@ jobs:
       - name: Last build environment setup steps
         run: uv run --locked --no-sync python pymakefile.py setup_dev_env
 
-      - name: Build C extension
+      - name: Build and test wheels
         run: uv run --locked --no-sync python pymakefile.py build_wheels
 
       - name: Upload artifact

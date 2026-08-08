@@ -31,6 +31,13 @@ WIN = sys.platform.startswith("win")
 MAC = sys.platform.startswith("darwin")
 
 
+# check for mingw compiler on windows
+is_mingw = False
+if WIN:
+    from setuptools._distutils import ccompiler
+    is_mingw = ccompiler.get_default_compiler() == 'mingw32'
+
+
 # Have to copy from "create_shadertext.py" script due to the use of pyproject.toml
 # Full explanation:
 # https://github.com/pypa/setuptools/issues/3939
@@ -220,7 +227,7 @@ parser.add_argument(
 parser.add_argument("--use-openmp", type=str2bool, help="Use OpenMP")
 parser.add_argument(
     "--use-vtkm",
-    choices=("1.5", "1.6", "1.7", "no"),
+    choices=("2.0", "2.1", "2.2", "2.3", "no"),
     help="Use VTK-m for isosurface generation",
 )
 parser.add_argument(
@@ -268,6 +275,10 @@ def get_prefix_path() -> list[str]:
             paths += [os.path.join(sys.prefix, "Library")]
 
         paths += [sys.prefix] + paths
+
+    if WIN and is_mingw:
+        if os.path.isdir(sys.prefix):
+            paths.append(os.path.normpath(sys.prefix))
 
     paths += ["/usr"]
 
@@ -497,23 +508,28 @@ class install_pymol(install):
 
         with open(launch_script, "w") as out:
             if WIN:
-                # paths relative to launcher, if possible
-                try:
-                    python_exe = "%~dp0\\" + os.path.relpath(
-                        python_exe, self.install_scripts
-                    )
-                except ValueError:
-                    pass
-                try:
-                    pymol_file = "%~dp0\\" + os.path.relpath(
-                        pymol_file, self.install_scripts
-                    )
-                except ValueError:
-                    pymol_file = os.path.abspath(pymol_file)
-
                 if not self.pymol_path_is_default:
                     out.write(f"set PYMOL_PATH={pymol_path}" + os.linesep)
-                out.write('"%s" "%s"' % (python_exe, pymol_file))
+
+                if is_mingw:
+                    python_exe = "%~dp0\\python.exe"
+                    out.write('"%s" -m pymol' % python_exe)
+                else:
+                    # paths relative to launcher, if possible
+                    try:
+                        python_exe = "%~dp0\\" + os.path.relpath(
+                            python_exe, self.install_scripts
+                        )
+                    except ValueError:
+                        pass
+                    try:
+                        pymol_file = "%~dp0\\" + os.path.relpath(
+                            pymol_file, self.install_scripts
+                        )
+                    except ValueError:
+                        pymol_file = os.path.abspath(pymol_file)
+                    out.write('"%s" "%s"' % (python_exe, pymol_file))
+
                 out.write(" %*" + os.linesep)
             else:
                 out.write("#!/bin/sh" + os.linesep)
@@ -548,12 +564,15 @@ pymol_src_dirs = [
     "layer3",
     "layer4",
     "layer5",
+    "layerGraphics",
+    "layerGraphics/gl",
     generated_dir,
 ]
 
 def_macros = [
     ("_PYMOL_LIBPNG", None),
     ("_PYMOL_FREETYPE", None),
+
 ]
 
 if DEBUG and not WIN:
@@ -564,8 +583,9 @@ if DEBUG and not WIN:
 
 libs = ["png", "freetype"]
 lib_dirs = []
-ext_comp_args = (
-    [
+ext_comp_args = []
+if is_mingw or not WIN:
+    ext_comp_args.extend([
         "-Werror=return-type",
         "-Wunused-variable",
         "-Wno-switch",
@@ -574,27 +594,27 @@ ext_comp_args = (
         "-Wno-char-subscripts",
         # optimizations
         "-Og" if DEBUG else "-O3",
-    ]
-    if not WIN
-    else ["/MP"]
-)
+    ])
+else:  # MSVC
+    ext_comp_args.extend([
+        "/MP",
+        "/std:c++17",
+    ])
 ext_link_args = []
 ext_objects = []
 data_files = []
 ext_modules = []
 
 if options.use_openmp == "yes":
-    def_macros += [
-        ("PYMOL_OPENMP", None),
-    ]
-    if MAC:
-        ext_comp_args += ["-Xpreprocessor", "-fopenmp"]
-        libs += ["omp"]
-    elif WIN:
-        ext_comp_args += ["/openmp"]
-    else:
-        ext_comp_args += ["-fopenmp"]
-        ext_link_args += ["-fopenmp"]
+    def_macros += [("PYMOL_OPENMP", None)]
+    if WIN and not is_mingw:  # MSVC
+        ext_comp_args.append("/openmp")
+    elif MAC:  # macOS Clang
+        ext_comp_args.extend(["-Xpreprocessor", "-fopenmp"])
+        libs.append("omp")
+    else:  # GCC/Clang on Linux, and MinGW on Windows
+        ext_comp_args.append("-fopenmp")
+        ext_link_args.append("-fopenmp")
 
 if options.vmd_plugins:
     # VMD plugin support
@@ -645,6 +665,8 @@ if options.openvr:
     ]
 
 inc_dirs += pymol_src_dirs
+
+inc_dirs += ["contrib/pocketfft"]
 
 # ============================================================================
 if MAC:
@@ -697,14 +719,18 @@ if WIN:
     )
 
     if DEBUG:
-        ext_comp_args += ["/Z7"]
-        ext_link_args += ["/DEBUG"]
+        if is_mingw:
+            ext_comp_args += ["-g"]
+        else:
+            ext_comp_args += ["/Z7"]
+            ext_link_args += ["/DEBUG"]
 
     libs += [
         "opengl32",
     ]
-    # TODO: Remove when we move to setup-CMake
-    ext_comp_args += ["/std:c++17"]
+    if not is_mingw:
+        # TODO: Remove when we move to setup-CMake
+        ext_comp_args += ["/std:c++17"]
 
 if not (MAC or WIN):
     libs += [
@@ -730,17 +756,11 @@ if options.use_vtkm != "no":
         vtkm_inc_dir,
         vtkm_inc_dir + "/vtkm/thirdparty/diy/vtkmdiy/include",
         vtkm_inc_dir + "/vtkm/thirdparty/lcl/vtkmlcl",
-    ] + (options.use_vtkm == "1.5") * [
-        vtkm_inc_dir + "/vtkm/thirdparty/diy",
-        vtkm_inc_dir + "/vtkm/thirdparty/taotuple",
     ]
     libs += [
         f"vtkm_cont-{options.use_vtkm}",
-        (
-            f"vtkm_filter-{options.use_vtkm}"
-            if options.use_vtkm == "1.5"
-            else f"vtkm_filter_contour-{options.use_vtkm}"
-        ),
+        f"vtkm_filter_contour-{options.use_vtkm}",
+        f"vtkm_filter_core-{options.use_vtkm}",
     ]
 
 if options.vmd_plugins:
@@ -816,10 +836,26 @@ champ_inc_dirs = ["contrib/champ"]
 champ_inc_dirs.append(sysconfig.get_paths()["include"])
 champ_inc_dirs.append(sysconfig.get_paths()["platinclude"])
 
+champ_libs = []
+
 if WIN:
-    # pyconfig.py forces linking against pythonXY.lib on MSVC
-    py_lib = pathlib.Path(sysconfig.get_paths()["stdlib"]).parent / "libs"
-    lib_dirs.append(str(py_lib))
+    if not is_mingw:
+        # pyconfig.py forces linking against pythonXY.lib on MSVC
+        py_lib = pathlib.Path(sysconfig.get_paths()["stdlib"]).parent / "libs"
+        lib_dirs.append(str(py_lib))
+    else:
+        ldversion = (
+            sysconfig.get_config_var("LDVERSION")
+            or f"{sys.version_info.major}.{sys.version_info.minor}"
+        )
+        libs.append(f"python{ldversion}")
+        champ_libs.append(f"python{ldversion}")
+        mingw_libdir = (
+            sysconfig.get_config_var("LIBDIR")
+            or os.path.join(sys.prefix, "lib")
+        )
+        if mingw_libdir and os.path.isdir(mingw_libdir):
+            lib_dirs.append(mingw_libdir)
 
 ext_modules += [
     CMakeExtension(
@@ -836,6 +872,7 @@ ext_modules += [
         name="chempy.champ._champ",
         sources=get_sources(["contrib/champ"]),
         include_dirs=champ_inc_dirs,
+        libraries=champ_libs,
         library_dirs=lib_dirs,
     ),
 ]

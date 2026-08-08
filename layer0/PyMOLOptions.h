@@ -21,7 +21,7 @@ Z* -------------------------------------------------------------------
 
 #define PYMOL_MAX_OPT_STR 1025
 
-struct _CPyMOLOptions {
+struct CPyMOLOptions {
   int pmgui, internal_gui, show_splash, internal_feedback, security, game_mode, force_stereo,   /* 1 = force stereo (if possible); -1 = force mono; 0 = autodetect */
    
     winX,
@@ -58,10 +58,5 @@ struct _CPyMOLOptions {
   /* WARNING: don't add, delete, or change item order unless you also update
      PyMOL.c "CPyMOLOptions Defaults"where this global structure is initialized */
 };
-
-#ifndef CPyMOLOptions_DEFINED
-typedef struct _CPyMOLOptions CPyMOLOptions;
-#define CPyMOLOptions_DEFINED
-#endif
 
 #endif

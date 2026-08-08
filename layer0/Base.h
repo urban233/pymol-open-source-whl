@@ -72,10 +72,7 @@ typedef struct _CRay CRay;
 
 /* likewise */
 
-#ifndef CGO_DEFINED
 class CGO;
-#define CGO_DEFINED
-#endif
 
 class PickColorManager;
 

@@ -17,22 +17,26 @@ Z* -------------------------------------------------------------------
 #ifndef _H_CGO
 #define _H_CGO
 
-#include"Base.h"
-#include"Ray.h"
-#include"Setting.h"
-#include"os_gl_cgo.h"
-#include"Rep.h"
-#include"MemoryDebug.h"
-#include <vector>
-#include <unordered_map>
-#include <typeinfo>
-#include <type_traits>
-#include <memory>
+#include "Base.h"
+#include "GPUEnums.h"
 #include "GenericBuffer.h"
-#include <set>
+#include "MemoryDebug.h"
+#include "Ray.h"
+#include "Rep.h"
+#include "Setting.h"
+#include "os_gl_cgo.h"
+
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
+
 #include <cstdint>
+#include <map>
+#include <memory>
+#include <set>
+#include <type_traits>
+#include <typeinfo>
+#include <unordered_map>
+#include <vector>
 
 /* Compiled Graphics Library for simple graphics objects
    in floating point three-space, with the goal of achieving
@@ -1185,7 +1189,7 @@ CGO *CGOConvertSpheresToPoints(const CGO *I);
 
 CGO* CGOConvertToShader(const CGO* I, AttribDataDesc& attrData,
     AttribDataDesc& pickData, int mode,
-    const buffer_layout layout = buffer_layout::INTERLEAVED,
+    const VertexBufferLayout layout = VertexBufferLayout::Interleaved,
     bool check_attr_for_data = true, int* idx_array = nullptr,
     int nindicesperfrag = 0, int nfragspergroup = 1);
 

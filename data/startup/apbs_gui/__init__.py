@@ -142,13 +142,13 @@ Execute the pipeline (prep, apbs, surface vis)
         if warnings:
             @form._callInMainThread
             def result():
-                msgbox = QMessageBox(QMessageBox.Question, 'Continue?',
+                msgbox = QMessageBox(QMessageBox.Icon.Question, 'Continue?',
                     method + ' emmitted warnings, do you want to continue?',
-                    QMessageBox.Yes | QMessageBox.No , form._dialog)
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No , form._dialog)
                 msgbox.setDetailedText(warnings)
-                return msgbox.exec_()
+                return msgbox.exec()
 
-            if result == QMessageBox.No:
+            if result == QMessageBox.StandardButton.No:
                 raise SilentAbort
 
     if form.do_apbs.isChecked():
@@ -266,9 +266,9 @@ def dialog(_self=None):
             return
 
         quit_msg = "Finished with Success. Close the APBS dialog?"
-        if QMessageBox.Yes == QMessageBox.question(
-                form._dialog, 'Finished', quit_msg, QMessageBox.Yes,
-                QMessageBox.No):
+        if QMessageBox.StandardButton.Yes == QMessageBox.question(
+                form._dialog, 'Finished', quit_msg, QMessageBox.StandardButton.Yes,
+                QMessageBox.StandardButton.No):
             form._dialog.close()
 
     def handle_exception(e, stdout):
@@ -276,11 +276,10 @@ def dialog(_self=None):
             return
 
         msg = str(e) or 'unknown error'
-        msgbox = QMessageBox(QMessageBox.Critical, 'Error',
-                             msg, QMessageBox.Close, form._dialog)
+        msgbox = QMessageBox(QMessageBox.Icon.Critical, 'Error', msg, QMessageBox.StandardButton.Close, form._dialog)
         if stdout.strip():
             msgbox.setDetailedText(stdout)
-        msgbox.exec_()
+        msgbox.exec()
 
     # "Abort" button callback
     def abort():

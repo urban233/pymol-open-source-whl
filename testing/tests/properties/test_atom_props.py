@@ -6,7 +6,6 @@ Testing atom properties for simple getting/setting and loading from sdf and mae 
 import unittest
 from pymol import cmd, testing, stored
 
-@testing.requires('properties')
 class TestAtomProperties(testing.PyMOLTestCase):
 
     def testSetNoAtomProperty(self):
@@ -16,6 +15,7 @@ class TestAtomProperties(testing.PyMOLTestCase):
             self.assertEqual(False, True)
             pass
 
+    @testing.requires('incentive')
     @testing.foreach('1molecule.mae')
     def testLoadNoProperties(self, molfilename):
         cmd.set('load_object_props_default', '')
@@ -25,6 +25,7 @@ class TestAtomProperties(testing.PyMOLTestCase):
             prop_list= cmd.get_property_list(obj)
             self.assertEquals(prop_list, None)
 
+    @testing.requires('incentive')
     @testing.foreach('1molecule.mae')
     def testLoadNoAtomProperties(self, molfilename):
         cmd.set('load_atom_props_default', '')
@@ -37,6 +38,7 @@ class TestAtomProperties(testing.PyMOLTestCase):
             for i in stored.prop_lookup.keys():
                 self.assertEquals(len(stored.prop_lookup[i]), 0)
 
+    @testing.requires('incentive')
     @testing.foreach('1molecule.mae', '1d_smiles.mae')
     def testMAEchempy(self, molfilename):
         cmd.load(self.datafile(molfilename), 'test', object_props='*', atom_props='*')
@@ -71,6 +73,7 @@ class TestAtomProperties(testing.PyMOLTestCase):
                     self.assertEqual(val, stored.prop_lookup[idx][prop])
                 idx += 1
 
+    @testing.requires('incentive')
     def testMAEsaveLoadSessionsWithAtomProperties(self, binary_dump=False):
         cmd.set('pse_binary_dump', binary_dump)
         cmd.load(self.datafile('1molecule.mae'), '1molecule', atom_props='*')
@@ -91,12 +94,11 @@ class TestAtomProperties(testing.PyMOLTestCase):
         #test to make sure the properties are exactly the same from the saved session as the loaded session
         self.assertEqual(prop_lookup, stored.prop_lookup)
 
-    @testing.requires_version('2.4')
+    @testing.requires('incentive')
     def testMAEsaveLoadSessionsWithAtomPropertiesBinaryDump(self):
         cmd.set('pse_export_version', 2.4)
         self.testMAEsaveLoadSessionsWithAtomProperties(True)
 
-    @testing.requires_version('1.8.0.7')
     def testDel(self):
         cmd.pseudoatom('m1')
 

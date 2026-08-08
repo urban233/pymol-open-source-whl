@@ -197,281 +197,6 @@ std::size_t GetSizeOfVertexFormat(VertexFormat format)
   }
 }
 
-GenericBuffer::GenericBuffer(buffer_layout layout, GLenum usage)
-    : m_buffer_usage(usage)
-    , m_layout(layout)
-{
-}
-
-GenericBuffer::~GenericBuffer()
-{
-  for (auto i = 0; i < m_desc.size(); ++i) {
-    auto& glID = desc_glIDs[i];
-    if (glID) {
-      glDeleteBuffers(1, &glID);
-    }
-  }
-  if (m_interleavedID) {
-    glDeleteBuffers(1, &m_interleavedID);
-  }
-}
-
-bool GenericBuffer::bufferData(BufferDataDesc&& desc)
-{
-  m_desc = std::move(desc);
-  desc_glIDs = std::vector<GLuint>(m_desc.size());
-  return evaluate();
-}
-
-bool GenericBuffer::bufferData(
-    BufferDataDesc&& desc, const void* data, size_t len, size_t stride)
-{
-  bool ok = true;
-  m_desc = std::move(desc);
-  desc_glIDs = std::vector<GLuint>(m_desc.size());
-  m_interleaved = true;
-  m_stride = stride;
-  ok = genBuffer(m_interleavedID, len, data);
-  return ok;
-}
-
-void GenericBuffer::bufferSubData(size_t offset, size_t size, void* data, size_t index)
-{
-  assert("Invalid Desc index" && index < m_desc.size());
-  assert("Invalid GLDesc index" && index < desc_glIDs.size());
-  auto glID = m_interleaved ? m_interleavedID : desc_glIDs[index];
-  glBindBuffer(bufferType(), glID);
-  glBufferSubData(bufferType(), offset, size, data);
-}
-
-void GenericBuffer::bufferReplaceData(size_t offset, size_t len, const void* data)
-{
-  glBindBuffer(bufferType(), m_interleavedID);
-  glBufferSubData(bufferType(), offset, len, data);
-}
-
-bool GenericBuffer::evaluate()
-{
-  if (bufferType() == GL_ELEMENT_ARRAY_BUFFER) {
-    return seqBufferData();
-  } else {
-    switch (m_layout) {
-    case buffer_layout::SEPARATE:
-      return sepBufferData();
-      break;
-    case buffer_layout::SEQUENTIAL:
-      return seqBufferData();
-      break;
-    case buffer_layout::INTERLEAVED:
-      return interleaveBufferData();
-      break;
-    }
-  }
-  return true; // unreacheable/Should be false?
-}
-
-bool GenericBuffer::sepBufferData()
-{
-  for (auto i = 0; i < m_desc.size(); ++i) {
-    // If the specified size is 0 but we have a valid pointer
-    // then we are going to glVertexAttribXfv X in {1,2,3,4}
-    const auto& d = m_desc[i];
-    auto& glID = desc_glIDs[i];
-    if (d.data_ptr && (m_buffer_usage == GL_STATIC_DRAW)) {
-      if (d.data_size) {
-        if (!genBuffer(glID, d.data_size, d.data_ptr)) {
-          return false;
-        }
-      }
-    }
-  }
-  return true;
-}
-
-bool GenericBuffer::seqBufferData() {
-  // this is only going to use a single opengl vbo
-  m_interleaved = true;
-
-  size_t buffer_size { 0 };
-  for ( auto & d : m_desc ) {
-    buffer_size += d.data_size;
-  }
-
-  std::vector<std::uint8_t> buffer_data(buffer_size);
-  auto data_ptr = buffer_data.data();
-  size_t offset = 0;
-
-  for ( auto & d : m_desc ) {
-    d.offset = offset;
-    if (d.data_ptr)
-      memcpy(data_ptr, d.data_ptr, d.data_size);
-    else
-      memset(data_ptr, 0, d.data_size);
-    data_ptr += d.data_size;
-    offset += d.data_size;
-  }
-
-  return genBuffer(m_interleavedID, buffer_size, buffer_data.data());
-}
-
-bool GenericBuffer::interleaveBufferData()
-{
-  const std::size_t bufferCount = m_desc.size();
-  std::size_t stride = 0;
-  std::vector<const uint8_t*> data_table(bufferCount);
-  std::vector<const uint8_t*> ptr_table(bufferCount);
-  std::vector<std::size_t> size_table(bufferCount);
-  std::size_t count =
-      m_desc[0].data_size / GetSizeOfVertexFormat(m_desc[0].m_format);
-
-  // Maybe assert that all pointers in d_desc are valid?
-  for (size_t i = 0; i < bufferCount; ++i) {
-    auto& d = m_desc[i];
-    // offset is the current stride
-    d.offset = stride;
-
-    // These must come after so that offset starts at 0
-    // Size of 3 normals or whatever the current type is
-    size_table[i] = GetSizeOfVertexFormat(d.m_format);
-
-    // Increase our current estimate of the stride by this amount
-    stride += size_table[i];
-
-    // Does the addition of that previous stride leave us on a word boundry?
-    int m = stride % 4;
-    stride = (m ? (stride + (4 - m)) : stride);
-
-    // data_table a pointer to the begining of each array
-    data_table[i] = static_cast<const std::uint8_t*>(d.data_ptr);
-
-    // We will move these pointers along by the values in the size table
-    ptr_table[i] = data_table[i];
-  }
-
-  m_stride = stride;
-
-  std::size_t interleavedSize = count * stride;
-
-  std::vector<std::uint8_t> interleavedData(interleavedSize);
-  auto iPtr = interleavedData.data();
-
-  while (iPtr != (interleavedData.data() + interleavedSize)) {
-    for (size_t i = 0; i < bufferCount; ++i) {
-      if (ptr_table[i]) {
-        memcpy(iPtr, ptr_table[i], size_table[i]);
-        ptr_table[i] += size_table[i];
-      }
-      iPtr += size_table[i];
-    }
-  }
-
-  m_interleaved = true;
-  return genBuffer(m_interleavedID, interleavedSize, interleavedData.data());
-}
-
-bool GenericBuffer::genBuffer(GLuint& id, size_t size, const void* ptr)
-{
-  glGenBuffers(1, &id);
-  if (!CheckGLErrorOK(nullptr, "GenericBuffer::genBuffer failed\n"))
-    return false;
-  glBindBuffer(bufferType(), id);
-  if (!CheckGLErrorOK(nullptr, "GenericBuffer::bindBuffer failed\n"))
-    return false;
-  glBufferData(bufferType(), size, ptr, GL_STATIC_DRAW);
-  if (!CheckGLErrorOK(nullptr, "GenericBuffer::bufferData failed\n"))
-    return false;
-  return true;
-}
-
-void VertexBuffer::bind_attrib(GLuint prg, const BufferDesc& d, GLuint glID)
-{
-  GLint loc = glGetAttribLocation(prg, d.attr_name);
-  auto type_dim = VertexFormatToGLSize(d.m_format);
-  auto type = VertexFormatToGLType(d.m_format);
-  auto data_norm = VertexFormatToGLNormalized(d.m_format);
-  bool masked = false;
-  for (GLint lid : m_attribmask)
-    if (lid == loc)
-      masked = true;
-  if (loc >= 0)
-    m_locs.push_back(loc);
-  if (loc >= 0 && !masked) {
-    if (!m_interleaved && glID)
-      glBindBuffer(bufferType(), glID);
-    glEnableVertexAttribArray(loc);
-    glVertexAttribPointer(loc, type_dim, type, data_norm, m_stride,
-        reinterpret_cast<const void*>(d.offset));
-  }
-};
-
-VertexBuffer::VertexBuffer(buffer_layout layout, GLenum usage)
-    : GenericBuffer(layout, usage)
-{
-}
-
-void VertexBuffer::bind() const
-{
-  // we shouldn't use this one
-  if (m_interleaved)
-    glBindBuffer(bufferType(), m_interleavedID);
-}
-
-void VertexBuffer::bind(GLuint prg, int index)
-{
-  if (index >= 0) {
-    glBindBuffer(bufferType(), m_interleavedID);
-    bind_attrib(prg, m_desc[index], desc_glIDs[index]);
-  } else {
-    if (m_interleaved && m_interleavedID)
-      glBindBuffer(bufferType(), m_interleavedID);
-    for (auto i = 0; i < m_desc.size(); ++i) {
-      const auto& d = m_desc[i];
-      auto glID = desc_glIDs[i];
-      bind_attrib(prg, d, glID);
-    }
-    m_attribmask.clear();
-  }
-}
-
-void VertexBuffer::unbind()
-{
-  for (auto& d : m_locs) {
-    glDisableVertexAttribArray(d);
-  }
-  m_locs.clear();
-  glBindBuffer(bufferType(), 0);
-}
-
-void VertexBuffer::maskAttributes(std::vector<GLint> attrib_locs)
-{
-  m_attribmask = std::move(attrib_locs);
-}
-
-void VertexBuffer::maskAttribute(GLint attrib_loc)
-{
-  m_attribmask.push_back(attrib_loc);
-}
-
-std::uint32_t VertexBuffer::bufferType() const
-{
-  return GL_ARRAY_BUFFER;
-}
-
-void IndexBuffer::bind() const
-{
-  glBindBuffer(bufferType(), m_interleavedID);
-}
-
-void IndexBuffer::unbind()
-{
-  glBindBuffer(bufferType(), 0);
-}
-
-std::uint32_t IndexBuffer::bufferType() const
-{
-  return GL_ELEMENT_ARRAY_BUFFER;
-}
-
 /***********************************************************************
  * RENDERBUFFER
  ***********************************************************************/
@@ -484,7 +209,7 @@ const static int rbo_lut[rbo::storage::COUNT] = { GL_DEPTH_COMPONENT16,
 #endif
 void rbo::unbind() { glBindRenderbuffer(GL_RENDERBUFFER, 0); }
 
-void renderBuffer_t::genBuffer() {
+void RenderbufferGL::genBuffer() {
   glGenRenderbuffers(1, &_id);
   glBindRenderbuffer(GL_RENDERBUFFER, _id);
   glRenderbufferStorage(GL_RENDERBUFFER, rbo_lut[(int)_storage],
@@ -493,11 +218,11 @@ void renderBuffer_t::genBuffer() {
   CheckGLErrorOK(nullptr, "GLRenderBuffer::genBuffer failed");
 }
 
-void renderBuffer_t::freeBuffer() { glDeleteRenderbuffers(1, &_id); }
+void RenderbufferGL::freeBuffer() { glDeleteRenderbuffers(1, &_id); }
 
-void renderBuffer_t::bind() const { glBindRenderbuffer(GL_RENDERBUFFER, _id); }
+void RenderbufferGL::bind() const { glBindRenderbuffer(GL_RENDERBUFFER, _id); }
 
-void renderBuffer_t::unbind() const { glBindRenderbuffer(GL_RENDERBUFFER, 0); }
+void RenderbufferGL::unbind() const { glBindRenderbuffer(GL_RENDERBUFFER, 0); }
 
 /***********************************************************************
  * TEXTURE
@@ -642,7 +367,7 @@ void tex::env(tex::env_name name, tex::env_param param) {
 #endif
 }
 
-void textureBuffer_t::genBuffer() {
+void TextureGL::genBuffer() {
   GLenum dim = tex_tab(_dim);
   glGenTextures(1, &_id);
   glBindTexture(dim, _id);
@@ -659,9 +384,9 @@ void textureBuffer_t::genBuffer() {
   CheckGLErrorOK(nullptr, "GLTextureBuffer::genBuffer failed");
 }
 
-void textureBuffer_t::freeBuffer() { glDeleteTextures(1, &_id); }
+void TextureGL::freeBuffer() { glDeleteTextures(1, &_id); }
 
-void textureBuffer_t::texture_data_1D(int width, const void *data) {
+void TextureGL::texture_data_1D(int width, const void *data) {
 #ifdef PURE_OPENGL_ES_2
   fprintf(stderr,
           "No support for 1D textures\n");
@@ -689,7 +414,7 @@ void textureBuffer_t::texture_data_1D(int width, const void *data) {
 #endif
 }
 
-void textureBuffer_t::texture_data_2D(int width, int height, const void *data) {
+void TextureGL::texture_data_2D(int width, int height, const void *data) {
   using namespace tex;
   _width = width;
   _height = height;
@@ -713,7 +438,7 @@ void textureBuffer_t::texture_data_2D(int width, int height, const void *data) {
   CheckGLErrorOK(nullptr, "GLTextureBuffer::texture_data_2D failed");
 }
 
-void textureBuffer_t::texture_subdata_2D(
+void TextureGL::texture_subdata_2D(
     int xoffset, int yoffset, int width, int height, const void* data)
 {
   using namespace tex;
@@ -732,7 +457,7 @@ void textureBuffer_t::texture_subdata_2D(
   CheckGLErrorOK(nullptr, "GLTextureBuffer::texture_subdata_2D failed");
 }
 
-void textureBuffer_t::texture_data_3D(int width, int height, int depth,
+void TextureGL::texture_data_3D(int width, int height, int depth,
                                       const void *data) {
 #ifdef PURE_OPENGL_ES_2
   fprintf(stderr,
@@ -763,15 +488,15 @@ void textureBuffer_t::texture_data_3D(int width, int height, int depth,
   CheckGLErrorOK(nullptr, "GLTextureBuffer::texture_data_3D failed");
 }
 
-void textureBuffer_t::bind() const { glBindTexture(tex_tab(_dim), _id); }
+void TextureGL::bind() const { glBindTexture(tex_tab(_dim), _id); }
 
-void textureBuffer_t::bindToTextureUnit(std::uint8_t textureUnit) const
+void TextureGL::bindToTextureUnit(std::uint8_t textureUnit) const
 {
   glActiveTexture(GL_TEXTURE0 + textureUnit);
   bind();
 }
 
-void textureBuffer_t::unbind() const { glBindTexture(tex_tab(_dim), 0); }
+void TextureGL::unbind() const { glBindTexture(tex_tab(_dim), 0); }
 /***********************************************************************
  * FRAMEBUFFER
  ***********************************************************************/
@@ -793,11 +518,11 @@ template <typename T> static int fbo_tab(T val) { return fbo_lut[(int)val]; }
 
 void fbo::unbind() { glBindFramebuffer(GL_FRAMEBUFFER, 0); }
 
-void frameBuffer_t::genBuffer() { glGenFramebuffers(1, &_id); }
+void FramebufferGL::genBuffer() { glGenFramebuffers(1, &_id); }
 
-void frameBuffer_t::freeBuffer() { glDeleteFramebuffers(1, &_id); }
+void FramebufferGL::freeBuffer() { glDeleteFramebuffers(1, &_id); }
 
-void frameBuffer_t::attach_texture(textureBuffer_t *texture,
+void FramebufferGL::attach_texture(TextureGL *texture,
                                    fbo::attachment loc) {
   size_t id = texture->get_hash_id();
   _attachments.emplace_back(id, loc);
@@ -807,7 +532,7 @@ void frameBuffer_t::attach_texture(textureBuffer_t *texture,
   checkStatus();
 }
 
-void frameBuffer_t::attach_renderbuffer(renderBuffer_t *renderbuffer,
+void FramebufferGL::attach_renderbuffer(RenderbufferGL *renderbuffer,
                                         fbo::attachment loc) {
   size_t id = renderbuffer->get_hash_id();
   _attachments.emplace_back(id, loc);
@@ -817,11 +542,11 @@ void frameBuffer_t::attach_renderbuffer(renderBuffer_t *renderbuffer,
   checkStatus();
 }
 
-void frameBuffer_t::bind() const {
+void FramebufferGL::bind() const {
   glBindFramebuffer(GL_FRAMEBUFFER, _id);
 }
 
-void frameBuffer_t::checkStatus() {
+void FramebufferGL::checkStatus() {
   GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
   switch (status) {
   case GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT:
@@ -841,10 +566,24 @@ void frameBuffer_t::checkStatus() {
   }
 }
 
+void FramebufferGL::blitTo(std::uint32_t dest_id, glm::ivec2 srcExtent, glm::ivec2 dstOffset)
+{
+  glBindFramebuffer(GL_READ_FRAMEBUFFER, _id);
+  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, dest_id);
+  auto mask = GL_COLOR_BUFFER_BIT;
+  glBlitFramebuffer(0, 0, srcExtent.x, srcExtent.y, dstOffset.x, dstOffset.y,
+      dstOffset.x + srcExtent.x, dstOffset.y + srcExtent.y, mask, GL_NEAREST);
+}
+
+void FramebufferGL::blitTo(const FramebufferGL& dest, glm::ivec2 srcExtent, glm::ivec2 dstOffset)
+{
+  blitTo(dest._id, srcExtent, dstOffset);
+}
+
 /***********************************************************************
  * RENDERTARGET
  ***********************************************************************/
-renderTarget_t::~renderTarget_t() {
+RenderTargetGL::~RenderTargetGL() {
   for (auto &t : _textures)
     delete t;
 
@@ -855,14 +594,14 @@ renderTarget_t::~renderTarget_t() {
     delete _rbo;
 }
 
-void renderTarget_t::layout(std::vector<rt_layout_t> &&desc,
-                            renderBuffer_t *with_rbo) {
-  _fbo = new frameBuffer_t();
+void RenderTargetGL::layout(std::vector<rt_layout_t> &&desc,
+                            RenderbufferGL *with_rbo) {
+  _fbo = new FramebufferGL();
   if (with_rbo) {
     _rbo = with_rbo;
     _shared_rbo = true;
   } else {
-    _rbo = new renderBuffer_t(_size.x, _size.y, rbo::storage::DEPTH24);
+    _rbo = new RenderbufferGL(_size.x, _size.y, rbo::storage::DEPTH24);
   }
   for (auto &d : desc) {
     if (!d.width)
@@ -902,7 +641,7 @@ void renderTarget_t::layout(std::vector<rt_layout_t> &&desc,
       return;
     }
 
-    _textures.push_back(new textureBuffer_t(
+    _textures.push_back(new TextureGL(
         format, type, tex::filter::LINEAR, tex::filter::LINEAR,
         tex::wrap::CLAMP, tex::wrap::CLAMP));
     auto tex = _textures.back();
@@ -935,7 +674,7 @@ void renderTarget_t::layout(std::vector<rt_layout_t> &&desc,
   CheckGLErrorOK(nullptr, "GLRenderBuffer::layout failed\n");
 }
 
-void renderTarget_t::resize(shape_type size) {
+void RenderTargetGL::resize(shape_type size) {
   _size = size;
   if (!_shared_rbo) {
     delete _rbo;
@@ -957,10 +696,17 @@ void renderTarget_t::resize(shape_type size) {
   layout(std::move(desc), _rbo);
 }
 
-void renderTarget_t::bind(bool clear) const {
+void RenderTargetGL::bind(bool clear) const {
   _fbo->bind();
   if (clear) {
     glClearColor(0.f, 0.f, 0.f, 0.f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
   }
+}
+
+void RenderTargetGL::blitTo(std::uint32_t dest_id, glm::ivec2 dstOffset) {
+  _fbo->blitTo(dest_id, _size, dstOffset);
+}
+void RenderTargetGL::blitTo(const RenderTargetGL& dest, glm::ivec2 dstOffset) {
+    _fbo->blitTo(*dest._fbo, _size, dstOffset);
 }

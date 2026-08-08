@@ -7,7 +7,7 @@ def textformat(color, style=''):
 
     for word in style.split():
         if word == 'bold':
-            fmt.setFontWeight(QtGui.QFont.Bold)
+            fmt.setFontWeight(QtGui.QFont.Weight.Bold)
         elif word == 'italic':
             fmt.setFontItalic(True)
         elif word.startswith('bg:'):

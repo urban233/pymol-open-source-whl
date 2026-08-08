@@ -5,7 +5,6 @@ Testing selection by properties
 import unittest
 from pymol import cmd, testing
 
-@testing.requires('properties')
 class TestProperties(testing.PyMOLTestCase):
     def testNumeric(self):
         cmd.fragment('ala')

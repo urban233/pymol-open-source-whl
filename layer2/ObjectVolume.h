@@ -5,23 +5,23 @@ C* copyright (C) by Schrodinger.
 D* -------------------------------------------------------------------
 E* It is unlawful to modify or remove this copyright notice.
 F* -------------------------------------------------------------------
-G* Please see the accompanying LICENSE file for further information. 
+G* Please see the accompanying LICENSE file for further information.
 H* -------------------------------------------------------------------
 I* Additional authors of this source file include:
--* 
--* 
+-*
+-*
 -*
 Z* -------------------------------------------------------------------
 */
 #ifndef _H_ObjectVolume
 #define _H_ObjectVolume
 
-#include"CGO.h"
-#include"ObjectMap.h"
-#include"Word.h"
-#include"Symmetry.h"
-#include"Util2.h"
-#include"Result.h"
+#include "CGO.h"
+#include "ObjectMap.h"
+#include "Result.h"
+#include "Symmetry.h"
+#include "Util2.h"
+#include "Word.h"
 
 struct ObjectVolumeState : public CObjectState {
   ObjectNameType MapName;
@@ -40,7 +40,8 @@ struct ObjectVolumeState : public CObjectState {
   WordType caption{};
   float Corner[24];
   /* not stored */
-  pymol::cache_array<std::size_t, 3> textures{}; // 3D volume (map), 1D/2D color table, 3D carvemask
+  pymol::cache_array<std::size_t, 3>
+      textures{}; // 3D volume (map), 1D/2D color table, 3D carvemask
   pymol::copyable_ptr<CField> carvemask;
   unsigned int dim[3]{};
   pymol::copyable_ptr<Isofield> Field;
@@ -69,27 +70,25 @@ protected:
   CObjectState* _getObjectState(int state) override;
 };
 
-ObjectVolume *ObjectVolumeFromBox(PyMOLGlobals * G, ObjectVolume * obj, ObjectMap * map,
-                              int map_state,
-                              int state, float *mn, float *mx,
-                              float level, int meshMode,
-                              float carve, float *vert_vla, int quiet);
-ObjectVolume *ObjectVolumeFromXtalSym(PyMOLGlobals * G, ObjectVolume * obj, ObjectMap * map,
-                                  CSymmetry * sym,
-                                  int map_state,
-                                  int state, float *mn, float *mx,
-                                  float level, int meshMode,
-                                  float carve, float *vert_vla,
-                                  int quiet);
+ObjectVolume* ObjectVolumeFromBox(PyMOLGlobals* G, ObjectVolume* obj,
+    ObjectMap* map, int map_state, int state, float* mn, float* mx, float level,
+    int meshMode, float carve, float* vert_vla, int quiet);
+ObjectVolume* ObjectVolumeFromXtalSym(PyMOLGlobals* G, ObjectVolume* obj,
+    ObjectMap* map, CSymmetry* sym, int map_state, int state, float* mn,
+    float* mx, float level, int meshMode, float carve, float* vert_vla,
+    int quiet);
 
-PyObject *ObjectVolumeAsPyList(ObjectVolume * I);
-int ObjectVolumeNewFromPyList(PyMOLGlobals * G, PyObject * list, ObjectVolume ** result);
-int ObjectVolumeInvalidateMapName(ObjectVolume * I, const char *name, const char * new_name);
+PyObject* ObjectVolumeAsPyList(ObjectVolume* I);
+int ObjectVolumeNewFromPyList(
+    PyMOLGlobals* G, PyObject* list, ObjectVolume** result);
+int ObjectVolumeInvalidateMapName(
+    ObjectVolume* I, const char* name, const char* new_name);
 
-CField   * ObjectVolumeGetField(ObjectVolume* I);
+CField* ObjectVolumeGetField(ObjectVolume* I);
 PyObject* ObjectVolumeGetRamp(ObjectVolume* I, int state);
-pymol::Result<>  ObjectVolumeSetRamp(ObjectVolume* I, std::vector<float>&& ramp_list, int state);
+pymol::Result<> ObjectVolumeSetRamp(
+    ObjectVolume* I, std::vector<float>&& ramp_list, int state);
 
-ObjectMapState * ObjectVolumeGetMapState(ObjectVolume * I);
+ObjectMapState* ObjectVolumeGetMapState(ObjectVolume* I);
 
 #endif

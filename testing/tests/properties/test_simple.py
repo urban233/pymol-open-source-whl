@@ -6,10 +6,10 @@ Testing properties for simple getting/setting and loading from sdf and mae files
 import unittest
 from pymol import cmd, testing
 
-@testing.requires('properties')
 class TestProperties(testing.PyMOLTestCase):
 
     # test loading MAE files with no properties (default)
+    @testing.requires('incentive')
     def testMAEloadNoProperties(self):
         cmd.load(self.datafile('1d_smiles.mae'), '1d_smiles')
         objs = cmd.get_object_list()
@@ -18,6 +18,7 @@ class TestProperties(testing.PyMOLTestCase):
             self.assertIsNone(props)
 
     # test loading MAE files with all properties
+    @testing.requires('incentive')
     def testMAEloadAllProperties(self):
         cmd.load(self.datafile('1d_smiles.mae'), '1d_smiles', object_props='*')
         objs = cmd.get_object_list()
@@ -26,6 +27,7 @@ class TestProperties(testing.PyMOLTestCase):
             self.assertIsNotNone(props)
 
     # test loading MAE files with some properties listed
+    @testing.requires('incentive')
     def testMAEloadSomeProperties(self):
         props = ['s_knime_origin_file_name', 's_knime_origin_hostname']
         cmd.load(self.datafile('1d_smiles.mae'), '1d_smiles', object_props=' '.join(props))
@@ -35,6 +37,7 @@ class TestProperties(testing.PyMOLTestCase):
             self.assertEqual(len(props), len(allprops))
 
     # test loading MAE files with some properties listed that do not exist
+    @testing.requires('incentive')
     def testMAEloadSomePropertiesDontExist(self):
         props = ['s_knime_origin_file_name', 's_knime_origin_hostname', 'dontexist']
         cmd.load(self.datafile('1d_smiles.mae'), '1d_smiles', object_props=' '.join(props))
@@ -44,6 +47,7 @@ class TestProperties(testing.PyMOLTestCase):
             self.assertIsNotNone(allprops)
 
     # test loading MAE files with no properties listed
+    @testing.requires('incentive')
     def testMAEloadSomePropertiesEmptyList(self):
         props = []
         cmd.load(self.datafile('1d_smiles.mae'), '1d_smiles', object_props=' '.join(props))
@@ -52,6 +56,7 @@ class TestProperties(testing.PyMOLTestCase):
             allprops = cmd.get_property_list(obj)
             self.assertIsNone(allprops)
 
+    @testing.requires('incentive')
     def testMAEsaveLoadSessions(self):
         cmd.load(self.datafile('1d_smiles.mae'), '1d_smiles', object_props='*')
         allpropdata = {}
@@ -78,6 +83,7 @@ class TestProperties(testing.PyMOLTestCase):
                 except:
                     self.fail('properties are not the same: obj=%s prop=%s' % (obj, prop))
 
+    @testing.requires('incentive')
     def testMAEchempy(self):
         cmd.load(self.datafile('1d_smiles.mae'), '1d_smiles', object_props='*')
         objs = cmd.get_object_list()
@@ -93,7 +99,7 @@ class TestProperties(testing.PyMOLTestCase):
         v1 = 'foo'
         v2 = 'bar'
         v3 = 'com'
-        
+
         # single state
         cmd.set_property('filename', v1, 'm1')
         self.assertTrue('foo' == v1)
@@ -147,7 +153,6 @@ class TestProperties(testing.PyMOLTestCase):
         self.assertEqual(cid, cmd.get_property('PUBCHEM_COMPOUND_CID', 'm2'))
         self.assertEqual(None, cmd.get_property('PUBCHEM_EFFECTIVE_ROTOR_COUNT', 'm2'))
 
-    @testing.requires_version('2.5')
     def testRemoveAtoms(self):
         # Removing atoms must not remove object properties PYMOL-3583
         cmd.fragment("ala")

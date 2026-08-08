@@ -1,54 +1,54 @@
 
-/* 
+/*
 A* -------------------------------------------------------------------
 B* This file contains source code for the PyMOL computer program
-C* copyright 1998-2000 by Warren Lyford Delano of DeLano Scientific. 
+C* copyright 1998-2000 by Warren Lyford Delano of DeLano Scientific.
 D* -------------------------------------------------------------------
 E* It is unlawful to modify or remove this copyright notice.
 F* -------------------------------------------------------------------
-G* Please see the accompanying LICENSE file for further information. 
+G* Please see the accompanying LICENSE file for further information.
 H* -------------------------------------------------------------------
 I* Additional authors of this source file include:
--* 
--* 
+-*
+-*
 -*
 Z* -------------------------------------------------------------------
 */
 
 #include <algorithm>
 
-#include"os_python.h"
+#include "os_python.h"
 
-#include"os_predef.h"
-#include"os_std.h"
-#include"os_gl.h"
+#include "os_gl.h"
+#include "os_predef.h"
+#include "os_std.h"
 
-#include<math.h>
+#include <math.h>
 
-#include"Err.h"
-#include"ObjectVolume.h"
-#include"Base.h"
-#include"MemoryDebug.h"
-#include"Map.h"
-#include"Parse.h"
-#include"Isosurf.h"
-#include"Vector.h"
-#include"Color.h"
-#include"main.h"
-#include"Scene.h"
-#include"Setting.h"
-#include"Executive.h"
-#include"PConv.h"
-#include"P.h"
-#include"Matrix.h"
-#include"ObjectGadgetRamp.h"
-#include"ShaderMgr.h"
-#include"Field.h"
+#include "Base.h"
+#include "Color.h"
+#include "Err.h"
+#include "Executive.h"
 #include "Feedback.h"
+#include "Field.h"
+#include "Isosurf.h"
+#include "Map.h"
+#include "Matrix.h"
+#include "MemoryDebug.h"
+#include "ObjectGadgetRamp.h"
+#include "ObjectVolume.h"
+#include "P.h"
+#include "PConv.h"
+#include "Parse.h"
+#include "Scene.h"
+#include "Setting.h"
+#include "ShaderMgr.h"
+#include "Vector.h"
+#include "main.h"
 
-#define clamp(x,l,h) ((x) < (l) ? (l) : (x) > (h) ? (h) : (x))
+#define clamp(x, l, h) ((x) < (l) ? (l) : (x) > (h) ? (h) : (x))
 
-static void ObjectVolumeRecomputeExtent(ObjectVolume * I);
+static void ObjectVolumeRecomputeExtent(ObjectVolume* I);
 
 static ObjectVolumeState* ObjectVolumeGetActiveState(ObjectVolume* I)
 {
@@ -69,56 +69,61 @@ CObjectState* ObjectVolume::_getObjectState(int state)
   return &State[state];
 }
 
-static ObjectMapState * ObjectVolumeStateGetMapState(ObjectVolumeState * vs) {
-  ObjectMap *map = nullptr;
+static ObjectMapState* ObjectVolumeStateGetMapState(ObjectVolumeState* vs)
+{
+  ObjectMap* map = nullptr;
 
-  PyMOLGlobals * G = vs->G;
+  PyMOLGlobals* G = vs->G;
 
   map = ExecutiveFindObjectMapByName(G, vs->MapName);
-  if(!map) {
+  if (!map) {
     PRINTFB(G, FB_ObjectVolume, FB_Errors)
-      "ObjectVolume-Error: map '%s' has been deleted.\n", vs->MapName
-      ENDFB(G);
+    "ObjectVolume-Error: map '%s' has been deleted.\n", vs->MapName ENDFB(G);
     return nullptr;
   }
 
   return ObjectMapGetState(map, vs->MapState);
 }
 
-ObjectMapState * ObjectVolumeGetMapState(ObjectVolume * I) {
-  ObjectVolumeState * ovs = ObjectVolumeGetActiveState(I);
-  if(ovs)
+ObjectMapState* ObjectVolumeGetMapState(ObjectVolume* I)
+{
+  ObjectVolumeState* ovs = ObjectVolumeGetActiveState(I);
+  if (ovs)
     return ObjectVolumeStateGetMapState(ovs);
   return nullptr;
 }
 
-static PyObject *ObjectVolumeStateAsPyList(ObjectVolumeState * I)
+static PyObject* ObjectVolumeStateAsPyList(ObjectVolumeState* I)
 {
-  PyObject *result = nullptr;
+  PyObject* result = nullptr;
   result = PyList_New(19);
   PyList_SetItem(result, 0, PyInt_FromLong(I->Active));
   PyList_SetItem(result, 1, PyString_FromString(I->MapName));
   PyList_SetItem(result, 2, PyInt_FromLong(I->MapState));
-  PyList_SetItem(result, 3, PConvAutoNone(nullptr) /* CrystalAsPyList(&I->Crystal) */);
+  PyList_SetItem(
+      result, 3, PConvAutoNone(nullptr) /* CrystalAsPyList(&I->Crystal) */);
   PyList_SetItem(result, 4, PyInt_FromLong(I->ExtentFlag));
   PyList_SetItem(result, 5, PConvFloatArrayToPyList(I->ExtentMin, 3));
   PyList_SetItem(result, 6, PConvFloatArrayToPyList(I->ExtentMax, 3));
-  PyList_SetItem(result, 7, PConvAutoNone(nullptr) /* PConvIntArrayToPyList(I->Range, 6) */);
+  PyList_SetItem(result, 7,
+      PConvAutoNone(nullptr) /* PConvIntArrayToPyList(I->Range, 6) */);
   PyList_SetItem(result, 8, PyFloat_FromDouble(0.0 /* I->Level */));
   PyList_SetItem(result, 9, PyFloat_FromDouble(0.0 /* I->Radius */));
-  PyList_SetItem(result, 10, PyInt_FromLong(/* I->CarveFlag */ I->AtomVertex.data() != nullptr));
+  PyList_SetItem(result, 10,
+      PyInt_FromLong(/* I->CarveFlag */ I->AtomVertex.data() != nullptr));
   PyList_SetItem(result, 11, PyFloat_FromDouble(I->CarveBuffer));
-  PyList_SetItem(result, 12, I->AtomVertex ?
-      PConvFloatVLAToPyList(I->AtomVertex) : PConvAutoNone(nullptr));
+  PyList_SetItem(result, 12,
+      I->AtomVertex ? PConvFloatVLAToPyList(I->AtomVertex)
+                    : PConvAutoNone(nullptr));
   PyList_SetItem(result, 13, PyInt_FromLong(0 /* I->VolumeMode */));
   PyList_SetItem(result, 14, PyFloat_FromDouble(0.0 /* I->AltLevel */));
   PyList_SetItem(result, 15, PyInt_FromLong(1 /* I->quiet */));
-  if(I->Field) {
+  if (I->Field) {
     PyList_SetItem(result, 16, IsosurfAsPyList(I->G, I->Field.get()));
   } else {
     PyList_SetItem(result, 16, PConvAutoNone(nullptr));
   }
-  PyList_SetItem(result,17,PyInt_FromLong(I->RampSize()));
+  PyList_SetItem(result, 17, PyInt_FromLong(I->RampSize()));
   if (!I->Ramp.empty()) {
     PyList_SetItem(result, 18, PConvToPyObject(I->Ramp));
   } else {
@@ -127,11 +132,11 @@ static PyObject *ObjectVolumeStateAsPyList(ObjectVolumeState * I)
   return (PConvAutoNone(result));
 }
 
-static PyObject *ObjectVolumeAllStatesAsPyList(ObjectVolume * I)
+static PyObject* ObjectVolumeAllStatesAsPyList(ObjectVolume* I)
 {
   auto result = PyList_New(I->State.size());
-  for(int a = 0; a < I->State.size(); a++) {
-    if(I->State[a].Active) {
+  for (int a = 0; a < I->State.size(); a++) {
+    if (I->State[a].Active) {
       PyList_SetItem(result, a, ObjectVolumeStateAsPyList(&I->State[a]));
     } else {
       PyList_SetItem(result, a, PConvAutoNone(nullptr));
@@ -140,43 +145,45 @@ static PyObject *ObjectVolumeAllStatesAsPyList(ObjectVolume * I)
   return (PConvAutoNone(result));
 }
 
-static int ObjectVolumeStateFromPyList(PyMOLGlobals * G, ObjectVolumeState * I,
-                                     PyObject * list)
+static int ObjectVolumeStateFromPyList(
+    PyMOLGlobals* G, ObjectVolumeState* I, PyObject* list)
 {
   int ok = true;
   int ll = 0;
-  PyObject *tmp;
-  if(ok)
+  PyObject* tmp;
+  if (ok)
     ok = (list != nullptr);
-  if(ok) {
-    if(!PyList_Check(list))
+  if (ok) {
+    if (!PyList_Check(list))
       I->Active = false;
     else {
       *I = ObjectVolumeState(G);
-      if(ok)
+      if (ok)
         ok = (list != nullptr);
-      if(ok)
+      if (ok)
         ok = PyList_Check(list);
-      if(ok)
+      if (ok)
         ll = PyList_Size(list);
       /* TO SUPPORT BACKWARDS COMPATIBILITY...
          Always check ll when adding new PyList_GetItem's */
-      if(ok)
+      if (ok)
         ok = PConvPyIntToInt(PyList_GetItem(list, 0), &I->Active);
-      if(ok)
+      if (ok)
         ok = PConvPyStrToStr(PyList_GetItem(list, 1), I->MapName, WordLength);
-      if(ok)
+      if (ok)
         ok = PConvPyIntToInt(PyList_GetItem(list, 2), &I->MapState);
 #if 0
       if(ok)
         ok = CrystalFromPyList(&I->Crystal, PyList_GetItem(list, 3));
 #endif
-      if(ok)
+      if (ok)
         ok = PConvPyIntToInt(PyList_GetItem(list, 4), &I->ExtentFlag);
-      if(ok)
-        ok = PConvPyListToFloatArrayInPlace(PyList_GetItem(list, 5), I->ExtentMin, 3);
-      if(ok)
-        ok = PConvPyListToFloatArrayInPlace(PyList_GetItem(list, 6), I->ExtentMax, 3);
+      if (ok)
+        ok = PConvPyListToFloatArrayInPlace(
+            PyList_GetItem(list, 5), I->ExtentMin, 3);
+      if (ok)
+        ok = PConvPyListToFloatArrayInPlace(
+            PyList_GetItem(list, 6), I->ExtentMax, 3);
 #if 0
       if(ok)
         ok = PConvPyListToIntArrayInPlace(PyList_GetItem(list, 7), I->Range, 6);
@@ -187,11 +194,11 @@ static int ObjectVolumeStateFromPyList(PyMOLGlobals * G, ObjectVolumeState * I,
       if(ok)
         ok = PConvPyIntToInt(PyList_GetItem(list, 10), &I->CarveFlag);
 #endif
-      if(ok)
+      if (ok)
         ok = PConvPyFloatToFloat(PyList_GetItem(list, 11), &I->CarveBuffer);
-      if(ok) {
+      if (ok) {
         tmp = PyList_GetItem(list, 12);
-        if(tmp == Py_None)
+        if (tmp == Py_None)
           I->AtomVertex = nullptr;
         else
           ok = PConvPyListToFloatVLA(tmp, &I->AtomVertex);
@@ -200,7 +207,7 @@ static int ObjectVolumeStateFromPyList(PyMOLGlobals * G, ObjectVolumeState * I,
       if(ok)
         ok = PConvPyIntToInt(PyList_GetItem(list, 13), &I->VolumeMode);
 #endif
-      if(ok) {
+      if (ok) {
         I->RefreshFlag = true;
         I->ResurfaceFlag = true;
       }
@@ -216,16 +223,15 @@ static int ObjectVolumeStateFromPyList(PyMOLGlobals * G, ObjectVolumeState * I,
         I->quiet = true;
       }
 #endif
-      if(ok && (ll > 16)) {
+      if (ok && (ll > 16)) {
         tmp = PyList_GetItem(list, 16);
-        if(CPythonVal_IsNone(tmp))
+        if (CPythonVal_IsNone(tmp))
           I->Field.reset();
-        else
-          {
-            I->Field.reset(IsosurfNewFromPyList(G, tmp));
-            ok = I->Field != nullptr;
-          }
-	CPythonVal_Free(tmp);
+        else {
+          I->Field.reset(IsosurfNewFromPyList(G, tmp));
+          ok = I->Field != nullptr;
+        }
+        CPythonVal_Free(tmp);
       }
 #if 0
       if (ok && (ll > 17)) {
@@ -234,58 +240,59 @@ static int ObjectVolumeStateFromPyList(PyMOLGlobals * G, ObjectVolumeState * I,
 #endif
       if (ok && (ll > 18)) {
         tmp = PyList_GetItem(list, 18);
-        if(!CPythonVal_IsNone(tmp))
+        if (!CPythonVal_IsNone(tmp))
           ok = PConvFromPyObject(G, tmp, I->Ramp);
-	CPythonVal_Free(tmp);
+        CPythonVal_Free(tmp);
       }
     }
   }
   return (ok);
 }
 
-static int ObjectVolumeAllStatesFromPyList(ObjectVolume * I, PyObject * list)
+static int ObjectVolumeAllStatesFromPyList(ObjectVolume* I, PyObject* list)
 {
 
   int ok = true;
   VecCheckEmplace(I->State, I->State.size(), I->G);
-  if(ok)
+  if (ok)
     ok = PyList_Check(list);
-  if(ok) {
-    for(int a = 0; a < I->State.size(); a++) {
-      CPythonVal *val = CPythonVal_PyList_GetItem(I->G, list, a);
+  if (ok) {
+    for (int a = 0; a < I->State.size(); a++) {
+      CPythonVal* val = CPythonVal_PyList_GetItem(I->G, list, a);
       ok = ObjectVolumeStateFromPyList(I->G, &I->State[a], val);
       CPythonVal_Free(val);
-      if(!ok)
+      if (!ok)
         break;
     }
   }
   return (ok);
 }
 
-int ObjectVolumeNewFromPyList(PyMOLGlobals * G, PyObject * list, ObjectVolume ** result)
+int ObjectVolumeNewFromPyList(
+    PyMOLGlobals* G, PyObject* list, ObjectVolume** result)
 {
   int ok = true;
-  ObjectVolume *I = nullptr;
+  ObjectVolume* I = nullptr;
   (*result) = nullptr;
-  if(ok)
+  if (ok)
     ok = (list != nullptr);
-  if(ok)
+  if (ok)
     ok = PyList_Check(list);
   /* TO SUPPORT BACKWARDS COMPATIBILITY...
      Always check ll when adding new PyList_GetItem's */
   I = new ObjectVolume(G);
-  if(ok)
+  if (ok)
     ok = (I != nullptr);
-  if(ok){
-    auto *val = PyList_GetItem(list, 0);
+  if (ok) {
+    auto* val = PyList_GetItem(list, 0);
     ok = ObjectFromPyList(G, val, I);
   }
-  if(ok){
-    CPythonVal *val = CPythonVal_PyList_GetItem(G, list, 2);
+  if (ok) {
+    CPythonVal* val = CPythonVal_PyList_GetItem(G, list, 2);
     ok = ObjectVolumeAllStatesFromPyList(I, val);
     CPythonVal_Free(val);
   }
-  if(ok) {
+  if (ok) {
     (*result) = I;
     ObjectVolumeRecomputeExtent(I);
   } else {
@@ -294,7 +301,7 @@ int ObjectVolumeNewFromPyList(PyMOLGlobals * G, PyObject * list, ObjectVolume **
   return (ok);
 }
 
-PyObject *ObjectVolumeAsPyList(ObjectVolume * I)
+PyObject* ObjectVolumeAsPyList(ObjectVolume* I)
 {
   auto result = PyList_New(3);
   PyList_SetItem(result, 0, ObjectAsPyList(I));
@@ -305,21 +312,24 @@ PyObject *ObjectVolumeAsPyList(ObjectVolume * I)
 
 ObjectVolumeState::~ObjectVolumeState()
 {
-  if(G->HaveGUI) {
+  if (G->HaveGUI) {
     std::array<std::size_t, std::tuple_size<decltype(textures)>::value> t{};
     std::transform(textures.begin(), textures.end(), t.begin(),
-        [](const pymol::cache_value<std::size_t>& value) { return value.value; });
+        [](const pymol::cache_value<std::size_t>& value) {
+          return value.value;
+        });
     G->ShaderMgr->freeGPUBuffers(t.data(), 3);
   }
 }
 
-int ObjectVolumeInvalidateMapName(ObjectVolume * I, const char *name, const char * new_name)
+int ObjectVolumeInvalidateMapName(
+    ObjectVolume* I, const char* name, const char* new_name)
 {
   int result = false;
-  for(int a = 0; a < I->State.size(); a++) {
+  for (int a = 0; a < I->State.size(); a++) {
     auto vs = &I->State[a];
-    if(vs->Active) {
-      if(strcmp(vs->MapName, name) == 0) {
+    if (vs->Active) {
+      if (strcmp(vs->MapName, name) == 0) {
         if (new_name)
           strcpy(vs->MapName, new_name);
         I->invalidate(cRepAll, cRepInvAll, a);
@@ -335,29 +345,28 @@ void ObjectVolume::invalidate(cRep_t rep, cRepInv_t level, int state)
   auto I = this;
   int a;
   int once_flag = true;
-  if(level >= cRepInvExtents) {
+  if (level >= cRepInvExtents) {
     I->ExtentFlag = false;
   }
 
   PRINTFB(I->G, FB_ObjectVolume, FB_Blather)
-    "ObjectVolumeInvalidate-Msg: %zu states.\n", I->State.size()
-    ENDFB(I->G);
+  "ObjectVolumeInvalidate-Msg: %zu states.\n", I->State.size() ENDFB(I->G);
 
-  if((rep == cRepVolume) || (rep == cRepAll) || (rep == cRepExtent)) {
-    for(a = 0; a < I->State.size(); a++) {
-      if(state < 0)
+  if ((rep == cRepVolume) || (rep == cRepAll) || (rep == cRepExtent)) {
+    for (a = 0; a < I->State.size(); a++) {
+      if (state < 0)
         once_flag = false;
-      if(!once_flag)
+      if (!once_flag)
         state = a;
-      if(level == cRepInvColor || level == cRepInvAll) {
+      if (level == cRepInvColor || level == cRepInvAll) {
         I->State[state].RecolorFlag = true;
       }
-      if(level != cRepInvColor) {
+      if (level != cRepInvColor) {
         I->State[state].ResurfaceFlag = true;
         I->State[state].RefreshFlag = true;
       }
       SceneChanged(I->G);
-      if(once_flag)
+      if (once_flag)
         break;
     }
   }
@@ -367,27 +376,29 @@ void ObjectVolume::invalidate(cRep_t rep, cRepInv_t level, int state)
  * Get the field either from the associated map, or from vs->Field in case
  * this is a reduced or symmetry expanded volume.
  */
-static CField * ObjectVolumeStateGetField(ObjectVolumeState * vs) {
+static CField* ObjectVolumeStateGetField(ObjectVolumeState* vs)
+{
   if (!vs)
     return nullptr;
-  if(vs->Field)
+  if (vs->Field)
     return vs->Field->data.get();
   return ObjectVolumeStateGetMapState(vs)->Field->data.get();
 }
 
-CField * ObjectVolumeGetField(ObjectVolume * I) {
+CField* ObjectVolumeGetField(ObjectVolume* I)
+{
   return ObjectVolumeStateGetField(ObjectVolumeGetActiveState(I));
 }
 
 /**
  * Get a 4x4 (incl. translation) FracToReal from corner array
  */
-static void get44FracToRealFromCorner(const float * corner, float * frac2real)
+static void get44FracToRealFromCorner(const float* corner, float* frac2real)
 {
   float tmp[16];
   identity44f(tmp);
-  subtract3f(corner +  3, corner, tmp);
-  subtract3f(corner +  6, corner, tmp + 4);
+  subtract3f(corner + 3, corner, tmp);
+  subtract3f(corner + 6, corner, tmp + 4);
   subtract3f(corner + 12, corner, tmp + 8);
   copy3f(corner, tmp + 12);
   transpose44f44f(tmp, frac2real);
@@ -396,110 +407,108 @@ static void get44FracToRealFromCorner(const float * corner, float * frac2real)
 void ObjectVolume::update()
 {
   auto I = this;
-  ObjectMapState *oms = nullptr;
+  ObjectMapState* oms = nullptr;
   float carve_buffer;
   int avoid_flag = false;
   int flag;
   int h, k, l;
   int i, j;
   float range;
-  MapType *voxelmap;            /* this has nothing to do with isosurfaces... */
+  MapType* voxelmap; /* this has nothing to do with isosurfaces... */
 
-  for(int a = 0; a < I->State.size(); a++) {
+  for (int a = 0; a < I->State.size(); a++) {
     auto vs = &I->State[a];
-    if(!vs || !vs->Active)
+    if (!vs || !vs->Active)
       continue;
 
     PRINTFD(G, FB_ObjectVolume)
-      "ObjectVolumeUpdate: state=%d, refresh=%d, resurface=%d.\n",
-      a, vs->RefreshFlag, vs->ResurfaceFlag ENDFD;
+    "ObjectVolumeUpdate: state=%d, refresh=%d, resurface=%d.\n", a,
+        vs->RefreshFlag, vs->ResurfaceFlag ENDFD;
 
     oms = ObjectVolumeStateGetMapState(vs);
 
-    if(!oms) {
+    if (!oms) {
       vs->ResurfaceFlag = false;
       continue;
     }
 
-    if(vs->RefreshFlag || vs->ResurfaceFlag) {
-      if(!oms->Matrix.empty()) {
+    if (vs->RefreshFlag || vs->ResurfaceFlag) {
+      if (!oms->Matrix.empty()) {
         ObjectStateSetMatrix(vs, oms->Matrix.data());
-      } else if(!vs->Matrix.empty()) {
+      } else if (!vs->Matrix.empty()) {
         ObjectStateResetMatrix(vs);
       }
 
       // data min/max/mean/stdev
-      range = SettingGet_f(I->G, I->Setting.get(), nullptr, cSetting_volume_data_range);
-      ObjectMapStateGetHistogram(I->G, oms, 0, range, vs->min_max_mean_stdev, 0.f, 0.f);
+      range = SettingGet_f(
+          I->G, I->Setting.get(), nullptr, cSetting_volume_data_range);
+      ObjectMapStateGetHistogram(
+          I->G, oms, 0, range, vs->min_max_mean_stdev, 0.f, 0.f);
     }
 
     // handle legacy or default color ramp
-    if(vs->Ramp.empty() || (vs->RampSize()
-          && vs->Ramp[0] == 0.f
-          && vs->Ramp[5 * (vs->RampSize() - 1)] == 359.f)) {
+    if (vs->Ramp.empty() || (vs->RampSize() && vs->Ramp[0] == 0.f &&
+                                vs->Ramp[5 * (vs->RampSize() - 1)] == 359.f)) {
 
-      if(!vs->Ramp.empty()) {
+      if (!vs->Ramp.empty()) {
         // legacy color ramp (0..359)
         range = vs->min_max_mean_stdev[1] - vs->min_max_mean_stdev[0];
         PRINTFB(G, FB_ObjectVolume, FB_Warnings)
-          " ObjectVolumeUpdate: detected legacy color ramp\n" ENDFB(G);
+        " ObjectVolumeUpdate: detected legacy color ramp\n" ENDFB(G);
         for (i = 0; i < vs->Ramp.size(); i += 5) {
           vs->Ramp[i] = vs->Ramp[i] / 359.f * range + vs->min_max_mean_stdev[0];
         }
       } else {
         // default color ramp (1.0 sigma peak)
-        if(vs->Ramp.empty()) {
-          vs->Ramp = std::vector<float>({
-            vs->min_max_mean_stdev[2] + 0.7f * vs->min_max_mean_stdev[3],
-            0.f, 0.f, 1.f, 0.0f,
-            vs->min_max_mean_stdev[2] + 1.0f * vs->min_max_mean_stdev[3],
-            0.f, 1.f, 1.f, 0.2f,
-            vs->min_max_mean_stdev[2] + 1.3f * vs->min_max_mean_stdev[3],
-            0.f, 0.f, 1.f, 0.0f
-          });
+        if (vs->Ramp.empty()) {
+          vs->Ramp = std::vector<float>(
+              {vs->min_max_mean_stdev[2] + 0.7f * vs->min_max_mean_stdev[3],
+                  0.f, 0.f, 1.f, 0.0f,
+                  vs->min_max_mean_stdev[2] + 1.0f * vs->min_max_mean_stdev[3],
+                  0.f, 1.f, 1.f, 0.2f,
+                  vs->min_max_mean_stdev[2] + 1.3f * vs->min_max_mean_stdev[3],
+                  0.f, 0.f, 1.f, 0.0f});
           vs->RecolorFlag = true;
         }
       }
     }
 
-    if((I->visRep & cRepVolumeBit) && vs->ResurfaceFlag) {
-      Isofield *field = nullptr;
+    if ((I->visRep & cRepVolumeBit) && vs->ResurfaceFlag) {
+      Isofield* field = nullptr;
       vs->ResurfaceFlag = false;
-      if(vs->Field) {
+      if (vs->Field) {
         field = vs->Field.get();
-      } else if(oms->Field) {
+      } else if (oms->Field) {
         field = oms->Field.get();
       } else {
         field = nullptr;
       }
 
-      if(field) {
+      if (field) {
         // get bounds and dimension data from field
         copy3(field->data->dim.data(), vs->dim);
         IsofieldGetCorners(G, field, vs->Corner);
 
         // transform corners by state matrix
-        if(!vs->Matrix.empty()) {
-          for(i = 0; i < 8; i++)
-            transform44d3f(vs->Matrix.data(),
-                vs->Corner + 3 * i,
-                vs->Corner + 3 * i);
+        if (!vs->Matrix.empty()) {
+          for (i = 0; i < 8; i++)
+            transform44d3f(
+                vs->Matrix.data(), vs->Corner + 3 * i, vs->Corner + 3 * i);
         }
       }
 
-      if(/* CarveFlag */ vs->AtomVertex) {
+      if (/* CarveFlag */ vs->AtomVertex) {
 
         carve_buffer = vs->CarveBuffer;
-        if(vs->CarveBuffer < 0.0F) {
+        if (vs->CarveBuffer < 0.0F) {
           avoid_flag = true;
           carve_buffer = -carve_buffer;
         }
 
-        // cull my friend, cull */ 
-        voxelmap = MapNew(I->G,
-            -carve_buffer, vs->AtomVertex,
+        // cull my friend, cull */
+        voxelmap = new MapType(I->G, -carve_buffer, vs->AtomVertex,
             vs->AtomVertex.size() / 3, nullptr);
-        if(voxelmap) {
+        if (voxelmap) {
 
           int x, y, z;
           int dx, dy, dz;
@@ -515,22 +524,25 @@ void ObjectVolume::update()
           get44FracToRealFromCorner(vs->Corner, frac2real);
 
           // initialize carve mask
-          vs->carvemask = pymol::make_copyable<CField>(G, (int*) vs->dim, 3, sizeof(GLubyte), cFieldOther);
+          vs->carvemask = pymol::make_copyable<CField>(
+              G, (int*) vs->dim, 3, sizeof(GLubyte), cFieldOther);
 
           // loop over voxels
           for (z = 0; z < dz; z++) {
             for (y = 0; y < dy; y++) {
               for (x = 0; x < dx; x++) {
-                float frac[3] = {(x + .5f) / dx, (y + .5f) / dy, (z + .5f) / dz};
+                float frac[3] = {
+                    (x + .5f) / dx, (y + .5f) / dy, (z + .5f) / dz};
 
                 transform44f3f(frac2real, frac, vv);
                 flag = avoid_flag;
 
                 // loop over close atoms
                 MapLocus(voxelmap, vv, &h, &k, &l);
-                for(i = *(MapEStart(voxelmap, h, k, l));
-                    i && (j = voxelmap->EList[i]) >= 0; i++) {
-                  if(within3f(vs->AtomVertex.data() + 3 * j, vv, carve_buffer)) {
+                for (i = *(MapEStart(voxelmap, h, k, l));
+                     i && (j = voxelmap->EList[i]) >= 0; i++) {
+                  if (within3f(
+                          vs->AtomVertex.data() + 3 * j, vv, carve_buffer)) {
                     flag = !flag;
                     break;
                   }
@@ -548,30 +560,33 @@ void ObjectVolume::update()
     vs->isUpdated = true;
     SceneInvalidate(I->G);
   }
-  if(!I->ExtentFlag) {
+  if (!I->ExtentFlag) {
     ObjectVolumeRecomputeExtent(I);
-    if(I->ExtentFlag)
+    if (I->ExtentFlag)
       SceneInvalidate(I->G);
   }
 }
 
-static
-int ObjectVolumeAddSlicePoint(float *p0, float *p1, float *zaxis, float d, float *slice, float *t0, float *t1, float *tex_coords, float *origin);
-static
-void ObjectVolumeDrawSlice(float *points, float *tex_coords, int n_points, float *zaxis);
+static int ObjectVolumeAddSlicePoint(float* p0, float* p1, float* zaxis,
+    float d, float* slice, float* t0, float* t1, float* tex_coords,
+    float* origin);
+static void ObjectVolumeDrawSlice(
+    float* points, float* tex_coords, int n_points, float* zaxis);
 
 /**
  * Converting Ramp to `count * 4` sized interpolated RGBA color
  * array. Returns allocated memory.
- * Assigns data minimum and range covered by ramp to `ramp_min` and `ramp_range`.
+ * Assigns data minimum and range covered by ramp to `ramp_min` and
+ * `ramp_range`.
  */
-static float * ObjectVolumeStateGetColors(PyMOLGlobals * G, ObjectVolumeState * ovs,
-    int count, float *ramp_min, float *ramp_range) {
+static float* ObjectVolumeStateGetColors(PyMOLGlobals* G,
+    ObjectVolumeState* ovs, int count, float* ramp_min, float* ramp_range)
+{
   int i, j, k;
   int lowerId, upperId = 0;
   float mixc, mixcincr, r_min, range;
   float stdev = ovs->min_max_mean_stdev[3];
-  float * colors;
+  float* colors;
 
   ok_assert(1, ovs->RampSize() > 1);
 
@@ -590,13 +605,13 @@ static float * ObjectVolumeStateGetColors(PyMOLGlobals * G, ObjectVolumeState * 
     lowerId = upperId;
     upperId = (int) (count * (ovs->Ramp[i * 5] - r_min) / range);
 
-    if(i == 0)
+    if (i == 0)
       continue;
 
     mixcincr = 1.f / (upperId - lowerId);
 
-    for (j = lowerId, mixc = 1.f; j < upperId; j++, mixc -= mixcincr){
-      if(j < 0 || j >= count)
+    for (j = lowerId, mixc = 1.f; j < upperId; j++, mixc -= mixcincr) {
+      if (j < 0 || j >= count)
         continue;
 
       for (k = 0; k < 4; k++)
@@ -610,7 +625,7 @@ static float * ObjectVolumeStateGetColors(PyMOLGlobals * G, ObjectVolumeState * 
   return colors;
 ok_except1:
   PRINTFB(G, FB_ObjectVolume, FB_Blather)
-    "ObjectVolumeStateGetColors failed\n" ENDFB(G);
+  "ObjectVolumeStateGetColors failed\n" ENDFB(G);
   return nullptr;
 }
 
@@ -618,7 +633,8 @@ ok_except1:
  * Adjust alpha values in the given RGBA array (in place) by:
  *   alpha_new = 1 - exp(-alpha * factor)
  */
-static void ColorsAdjustAlpha(float * colors, int count, float factor) {
+static void ColorsAdjustAlpha(float* colors, int count, float factor)
+{
   int j;
   for (j = 3; j < count * 4; j += 4) {
     colors[j] = 1. - expf(-colors[j] * factor);
@@ -629,43 +645,39 @@ static void ColorsAdjustAlpha(float * colors, int count, float factor) {
  * Render bounding box
  * TODO: duplicate in other reps?
  */
-static void ExtentRender(float * corner) {
+static void ExtentRender(float* corner)
+{
 #ifndef PURE_OPENGL_ES_2
-  int i, ci[] = {
-     0,  3,  3,  9,  9,  6,  6,  0,
-    12, 15, 15, 21, 21, 18, 18, 12,
-     0, 12,  3, 15,  9, 21,  6, 18
-  };
+  int i, ci[] = {0, 3, 3, 9, 9, 6, 6, 0, 12, 15, 15, 21, 21, 18, 18, 12, 0, 12,
+             3, 15, 9, 21, 6, 18};
   glBegin(GL_LINES);
-  for(i = 0; i < 8 * 3; i++)
+  for (i = 0; i < 8 * 3; i++)
     glVertex3fv(corner + ci[i]);
   glEnd();
 #endif
 }
 
-static size_t createColorTexture(PyMOLGlobals * G, const float *colors, const int count)
+static size_t createColorTexture(
+    PyMOLGlobals* G, const float* colors, const int count)
 {
   size_t texname = 0;
 #ifndef PURE_OPENGL_ES_2
-  auto tex = G->ShaderMgr->newGPUBuffer<textureBuffer_t>(
-    tex::format::RGBA,
-    tex::data_type::FLOAT,
-    tex::filter::LINEAR,
-    tex::filter::LINEAR,
-    tex::wrap::CLAMP
-    );
+  auto tex = G->ShaderMgr->newGPUBuffer<TextureGL>(tex::format::RGBA,
+      tex::data_type::FLOAT, tex::filter::LINEAR, tex::filter::LINEAR,
+      tex::wrap::CLAMP);
   tex->texture_data_1D(count, colors);
   texname = tex->get_hash_id();
 #endif
   return texname;
 }
 
-static size_t createPreintegrationTexture(PyMOLGlobals * G, const float *Table, const int count)
+static size_t createPreintegrationTexture(
+    PyMOLGlobals* G, const float* Table, const int count)
 {
   float factor, tmp1[4];
-  Vector4f *sat = pymol::malloc<Vector4f>(count + 1);
+  Vector4f* sat = pymol::malloc<Vector4f>(count + 1);
   int i, sb, sf, lookupindex = 0;
-  GLfloat *lookupImg = pymol::malloc<GLfloat>(count * count * 4);
+  GLfloat* lookupImg = pymol::malloc<GLfloat>(count * count * 4);
 
   memset(sat[0], 0, sizeof(sat[0]));
 
@@ -674,7 +686,7 @@ static size_t createPreintegrationTexture(PyMOLGlobals * G, const float *Table, 
     tmp1[3] = Table[i * 4 + 3];
     scale3f(Table + i * 4, tmp1[3], tmp1);
     add4f(tmp1, sat[i], sat[i + 1]);
-}
+  }
 
   // make quadratic lookup table
   for (sb = 0; sb < count; sb++) {
@@ -682,7 +694,13 @@ static size_t createPreintegrationTexture(PyMOLGlobals * G, const float *Table, 
       GLfloat col[4];
       int smin, smax;
 
-      if (sb < sf) { smin=sb; smax=sf; } else { smin=sf; smax=sb; }
+      if (sb < sf) {
+        smin = sb;
+        smax = sf;
+      } else {
+        smin = sf;
+        smax = sb;
+      }
 
       if (sat[smax + 1][3] != sat[smin][3]) {
         factor = 1.f / (sat[smax + 1][3] - sat[smin][3]);
@@ -702,14 +720,9 @@ static size_t createPreintegrationTexture(PyMOLGlobals * G, const float *Table, 
   }
 
   // upload texture
-  auto tex = G->ShaderMgr->newGPUBuffer<textureBuffer_t>(
-    tex::format::RGBA,
-    tex::data_type::FLOAT,
-    tex::filter::NEAREST,
-    tex::filter::NEAREST,
-    tex::wrap::CLAMP_TO_EDGE,
-    tex::wrap::CLAMP_TO_EDGE
-    );
+  auto tex = G->ShaderMgr->newGPUBuffer<TextureGL>(tex::format::RGBA,
+      tex::data_type::FLOAT, tex::filter::NEAREST, tex::filter::NEAREST,
+      tex::wrap::CLAMP_TO_EDGE, tex::wrap::CLAMP_TO_EDGE);
   tex->texture_data_2D(count, count, lookupImg);
 
   mfree(sat);
@@ -718,15 +731,16 @@ static size_t createPreintegrationTexture(PyMOLGlobals * G, const float *Table, 
   return tex->get_hash_id();
 }
 
-void ObjectVolume::render(RenderInfo * info)
+void ObjectVolume::render(RenderInfo* info)
 {
 #ifndef PURE_OPENGL_ES_2
   auto I = this;
   int state = info->state;
   const RenderPass pass = info->pass;
   int a = 0;
-  ObjectVolumeState *vs = nullptr;
-  float volume_layers =  SettingGet_f(I->G, I->Setting.get(), nullptr, cSetting_volume_layers);
+  ObjectVolumeState* vs = nullptr;
+  float volume_layers =
+      SettingGet_f(I->G, I->Setting.get(), nullptr, cSetting_volume_layers);
 #ifdef _PYMOL_IP_EXTRAS
   short volume_mode = SettingGetGlobal_i(G, cSetting_volume_mode);
   short ortho = SettingGetGlobal_i(G, cSetting_ortho);
@@ -735,44 +749,45 @@ void ObjectVolume::render(RenderInfo * info)
   GLint alpha_func;
   GLfloat alpha_ref;
   float tex_corner[24];
-  float *corner;
-  const float *ttt;
+  float* corner;
+  const float* ttt;
   float zaxis[3];
   float points[36], tex_coords[36];
   int n_points;
   float d, sliceRange, sliceDelta;
   float origin[3];
-  CShaderPrg *shaderPrg;
+  CShaderPrg* shaderPrg;
   bool volume_t = 0;
 
-  if(info->pick || pass != RenderPass::Transparent)
+  if (info->pick || pass != RenderPass::Transparent)
     return;
 
-  if(!G->HaveGUI || !G->ValidContext)
+  if (!G->HaveGUI || !G->ValidContext)
     return;
 
   /* bail if no shaders */
   if (G && !(G->ShaderMgr->ShadersPresent()))
-      return;
+    return;
 
-  if (info->pass == RenderPass::Transparent){
+  if (info->pass == RenderPass::Transparent) {
     volume_t = SettingGetGlobal_i(G, cSetting_transparency_mode) == 3;
   }
 
   // ViewElem/TTT Matrix
   ObjectPrepareContext(I, info);
 
-  for(a = 0; a < I->State.size(); ++a) {
+  for (a = 0; a < I->State.size(); ++a) {
 
-    if(state < 0 || state == a) {
+    if (state < 0 || state == a) {
       vs = &I->State[a];
-    } else if(a == 0 && I->State.size() == 1 && SettingGetGlobal_b(G, cSetting_static_singletons)) {
+    } else if (a == 0 && I->State.size() == 1 &&
+               SettingGetGlobal_b(G, cSetting_static_singletons)) {
       vs = &I->State[a];
     } else {
       continue;
     }
 
-    if(!vs || !vs->Active)
+    if (!vs || !vs->Active)
       continue;
 
     // PYMOL-3283
@@ -780,16 +795,16 @@ void ObjectVolume::render(RenderInfo * info)
       I->update();
 
     PRINTFB(I->G, FB_ObjectVolume, FB_Blather)
-      "ObjectVolumeRender-Msg: state=%d, pass=%d, refresh=%d, recolor=%d.\n",
-      a, static_cast<int>(pass), vs->RefreshFlag, vs->RecolorFlag ENDFB(I->G);
+    "ObjectVolumeRender-Msg: state=%d, pass=%d, refresh=%d, recolor=%d.\n", a,
+        static_cast<int>(pass), vs->RefreshFlag, vs->RecolorFlag ENDFB(I->G);
 
     corner = vs->Corner;
 
     SceneResetNormal(I->G, false);
 
     // render bounding box
-    if((I->visRep & cRepExtentBit)) {
-      if(!info->line_lighting)
+    if ((I->visRep & cRepExtentBit)) {
+      if (!info->line_lighting)
         glDisable(GL_LIGHTING);
       ObjectUseColor(I);
       ExtentRender(corner);
@@ -799,8 +814,9 @@ void ObjectVolume::render(RenderInfo * info)
     if (vs->RecolorFlag) {
       const int volume_nColors = 512;
 
-      float * colors = ObjectVolumeStateGetColors(G, vs, volume_nColors, &vs->ramp_min, &vs->ramp_range);
-      if(!colors)
+      float* colors = ObjectVolumeStateGetColors(
+          G, vs, volume_nColors, &vs->ramp_min, &vs->ramp_range);
+      if (!colors)
         continue;
 
       // volume_layers default is 256, adjust alpha to maintain integrated
@@ -814,7 +830,7 @@ void ObjectVolume::render(RenderInfo * info)
       vs->textures[1] =
 #ifdef _PYMOL_IP_EXTRAS
 #endif
-        createColorTexture(G, colors, volume_nColors);
+          createColorTexture(G, colors, volume_nColors);
 
       tex::env(tex::env_name::ENV_MODE, tex::env_param::REPLACE);
 
@@ -825,16 +841,18 @@ void ObjectVolume::render(RenderInfo * info)
     // upload map data texture
     if (!vs->textures[0] || vs->RefreshFlag) {
       tex::data_type volume_bit_depth;
-      CField * field = ObjectVolumeStateGetField(vs);
+      CField* field = ObjectVolumeStateGetField(vs);
 
-      if(!field) {
+      if (!field) {
         PRINTFB(G, FB_ObjectVolume, FB_Errors)
-          " ObjectVolumeRender-Error: Could not get field data.\n" ENDFB(G);
+        " ObjectVolumeRender-Error: Could not get field data.\n" ENDFB(G);
         return;
       }
 
-      int volume_bit_val = SettingGet_i(G, I->Setting.get(), nullptr, cSetting_volume_bit_depth);
-      volume_bit_depth = (volume_bit_val < 17) ? tex::data_type::HALF_FLOAT : tex::data_type::FLOAT;
+      int volume_bit_val =
+          SettingGet_i(G, I->Setting.get(), nullptr, cSetting_volume_bit_depth);
+      volume_bit_depth = (volume_bit_val < 17) ? tex::data_type::HALF_FLOAT
+                                               : tex::data_type::FLOAT;
 
       if (vs->textures[0]) {
         G->ShaderMgr->freeGPUBuffer(vs->textures[0]);
@@ -845,34 +863,27 @@ void ObjectVolume::render(RenderInfo * info)
         vs->textures[2] = 0;
       }
 
-      auto tex3dGenBind = [](PyMOLGlobals * G, tex::data_type dtype) -> size_t {
-        auto texture = G->ShaderMgr->newGPUBuffer<textureBuffer_t>(
-          tex::format::R,
-          dtype,
-          tex::filter::LINEAR,
-          tex::filter::LINEAR,
-          tex::wrap::CLAMP,
-          tex::wrap::CLAMP,
-          tex::wrap::CLAMP
-          );
+      auto tex3dGenBind = [](PyMOLGlobals* G, tex::data_type dtype) -> size_t {
+        auto texture = G->ShaderMgr->newGPUBuffer<TextureGL>(tex::format::R,
+            dtype, tex::filter::LINEAR, tex::filter::LINEAR, tex::wrap::CLAMP,
+            tex::wrap::CLAMP, tex::wrap::CLAMP);
         tex::env(tex::env_name::ENV_MODE, tex::env_param::REPLACE);
         return texture->get_hash_id();
       };
       // Create a 3D texture
       vs->textures[0] = tex3dGenBind(G, volume_bit_depth);
-      auto t0 = G->ShaderMgr->getGPUBuffer<textureBuffer_t>(vs->textures[0]);
-      t0->texture_data_3D(field->dim[2], field->dim[1], field->dim[0], field->data.data());
+      auto t0 = G->ShaderMgr->getGPUBuffer<TextureGL>(vs->textures[0]);
+      // Ensure that unpack alignment is set to 1
+      glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+      t0->texture_data_3D(
+          field->dim[2], field->dim[1], field->dim[0], field->data.data());
 
       // Create 3D carve mask texture
-      if(vs->carvemask) {
+      if (vs->carvemask) {
         vs->textures[2] = tex3dGenBind(G, tex::data_type::UBYTE);
-        auto t2 = G->ShaderMgr->getGPUBuffer<textureBuffer_t>(vs->textures[2]);
-        t2->texture_data_3D(
-          vs->carvemask->dim[2],
-          vs->carvemask->dim[1],
-          vs->carvemask->dim[0],
-          vs->carvemask->data.data()
-          );
+        auto t2 = G->ShaderMgr->getGPUBuffer<TextureGL>(vs->textures[2]);
+        t2->texture_data_3D(vs->carvemask->dim[2], vs->carvemask->dim[1],
+            vs->carvemask->dim[0], vs->carvemask->data.data());
 
         // not needed anymore, data now in texture memory
         vs->carvemask.reset();
@@ -882,42 +893,43 @@ void ObjectVolume::render(RenderInfo * info)
     }
 
     // render volume
-    if((I->visRep & cRepVolumeBit)) {
+    if ((I->visRep & cRepVolumeBit)) {
       int i, j;
 
       glDisable(GL_LIGHTING);
 
       // half grid cell inset in texture corners (texture coordinate units)
-      for(j = 0; j < 3; j++) {
+      for (j = 0; j < 3; j++) {
         float offset = 0.5 / vs->dim[2 - j];
         int bit = 1 << (2 - j);
-        for(i = 0; i < 8; i++)
+        for (i = 0; i < 8; i++)
           tex_corner[i * 3 + j] = (i & bit) ? 1.0 - offset : offset;
       }
 
       // for z-axis
       SceneGetViewNormal(G, zaxis);
 
-      for(j = 0; j < 3; j++) {
+      for (j = 0; j < 3; j++) {
         // map center
         origin[j] = corner[j] + 0.5 * (corner[21 + j] - corner[j]);
       }
 
       // TTT (movie object motions)
-      if(ObjectGetTTT(I, &ttt, -1))
+      if (ObjectGetTTT(I, &ttt, -1))
         MatrixTransformC44fAs33f3f(ttt, zaxis, zaxis);
 
       // determine number of slices based on max extent
       // and slice option
-      sliceRange = 0.5*sqrt(2.0) * 
-        std::max(std::max(fabs(corner[21]-corner[0]), fabs(corner[22]-corner[1])), 
-            fabs(corner[23]-corner[2]));
+      sliceRange = 0.5 * sqrt(2.0) *
+                   std::max(std::max(fabs(corner[21] - corner[0]),
+                                fabs(corner[22] - corner[1])),
+                       fabs(corner[23] - corner[2]));
       sliceDelta = (sliceRange / volume_layers);
 
       // load shader
       shaderPrg = G->ShaderMgr->GetShaderPrg(volume_t ? "volume_t" : "volume");
       if (!shaderPrg)
-	return;
+        return;
       shaderPrg->Enable();
       shaderPrg->Set_Stereo_And_AnaglyphMode();
       shaderPrg->Set_Matrices();
@@ -968,21 +980,18 @@ void ObjectVolume::render(RenderInfo * info)
 
       // draw slices
       {
-        int i, cornerindices[] = {
-          0,   3,    3,  9,    9,  6,    6,  0,
-          12, 15,   15, 21,   21, 18,   18, 12,
-          0,  12,    3, 15,    9, 21,    6, 18
-        };
-        for (d=sliceRange; d>=-sliceRange; d -= sliceDelta) {
+        int i, cornerindices[] = {0, 3, 3, 9, 9, 6, 6, 0, 12, 15, 15, 21, 21,
+                   18, 18, 12, 0, 12, 3, 15, 9, 21, 6, 18};
+        for (d = sliceRange; d >= -sliceRange; d -= sliceDelta) {
           // Slice the volume
           n_points = 0;
-          for(i = 0; i < 24; i += 2) {
+          for (i = 0; i < 24; i += 2) {
             int j = cornerindices[i], k = cornerindices[i + 1];
-            n_points += ObjectVolumeAddSlicePoint(
-                corner + j, corner + k, zaxis, d, points + n_points,
-                tex_corner + j, tex_corner + k, tex_coords + n_points, origin);
+            n_points += ObjectVolumeAddSlicePoint(corner + j, corner + k, zaxis,
+                d, points + n_points, tex_corner + j, tex_corner + k,
+                tex_coords + n_points, origin);
           }
-          ObjectVolumeDrawSlice(points, tex_coords, n_points/3, zaxis);
+          ObjectVolumeDrawSlice(points, tex_coords, n_points / 3, zaxis);
         }
       }
 
@@ -999,7 +1008,8 @@ void ObjectVolume::render(RenderInfo * info)
 #endif
 }
 
-void ObjectVolumeDrawSlice(float *points, float *tex_coords, int n_points, float *zaxis)
+void ObjectVolumeDrawSlice(
+    float* points, float* tex_coords, int n_points, float* zaxis)
 {
   float center[3], v[3], w[3], q[3];
   float angles[12];
@@ -1007,75 +1017,78 @@ void ObjectVolumeDrawSlice(float *points, float *tex_coords, int n_points, float
   int vertices[12];
   int i, j;
 
-    if (!n_points) return;
+  if (!n_points)
+    return;
 
-    // Calculate the polygon center
-    zero3f(center);
+  // Calculate the polygon center
+  zero3f(center);
 
-    for (i=0; i<3*n_points; i+=3) {
-      add3f(center, points + i, center);      // center += (points + i)
-    }    
+  for (i = 0; i < 3 * n_points; i += 3) {
+    add3f(center, points + i, center); // center += (points + i)
+  }
 
-    scale3f(center, 1. / n_points, center);   // center /= n_points
-    subtract3f(points, center, v);            // v = points - center
-    normalize3f(v);
-    
-    // Sort vertices by rotation angle around the central axis
-    for (i=0; i<n_points; i++) {
-      subtract3f(points + 3 * i, center, w);  // w = (points + 3 * i) - center
-      normalize3f(w);
-      cross_product3f(v, w, q);
-      c = dot_product3f(v, w);
-      s = dot_product3f(zaxis, q);
-      a = atan2(s, c);
-      if (a < 0.0f) a += 2.0f * PI;
-      j = i-1;
-      while (j>=0 && angles[j]>a) {
-        angles[j+1] = angles[j];
-        vertices[j+1] = vertices[j];
-        j--;
-      }
-      angles[j+1] = a;
-      vertices[j+1] = i;
+  scale3f(center, 1. / n_points, center); // center /= n_points
+  subtract3f(points, center, v);          // v = points - center
+  normalize3f(v);
+
+  // Sort vertices by rotation angle around the central axis
+  for (i = 0; i < n_points; i++) {
+    subtract3f(points + 3 * i, center, w); // w = (points + 3 * i) - center
+    normalize3f(w);
+    cross_product3f(v, w, q);
+    c = dot_product3f(v, w);
+    s = dot_product3f(zaxis, q);
+    a = atan2(s, c);
+    if (a < 0.0f)
+      a += 2.0f * PI;
+    j = i - 1;
+    while (j >= 0 && angles[j] > a) {
+      angles[j + 1] = angles[j];
+      vertices[j + 1] = vertices[j];
+      j--;
     }
+    angles[j + 1] = a;
+    vertices[j + 1] = i;
+  }
 
-    // Now the vertices are sorted so draw the polygon
-    glBegin(GL_POLYGON);
-    for (i=0; i<n_points; i++) {
-      glTexCoord3fv(&tex_coords[3 * vertices[i]]);
-      glVertex3fv(&points[3 * vertices[i]]);
-    }
-    glEnd();
+  // Now the vertices are sorted so draw the polygon
+  glBegin(GL_POLYGON);
+  for (i = 0; i < n_points; i++) {
+    glTexCoord3fv(&tex_coords[3 * vertices[i]]);
+    glVertex3fv(&points[3 * vertices[i]]);
+  }
+  glEnd();
 }
 
-int ObjectVolumeAddSlicePoint(float *pt0, float *pt1, float *zaxis, float d, 
-                              float *coords, float *t0, float *t1, float *tex_coords, float *origin)
+int ObjectVolumeAddSlicePoint(float* pt0, float* pt1, float* zaxis, float d,
+    float* coords, float* t0, float* t1, float* tex_coords, float* origin)
 {
-    
+
   float p0[3];
   float p1[3];
   float u;
 
-    p0[0] = pt0[0] - origin[0];
-    p0[1] = pt0[1] - origin[1];
-    p0[2] = pt0[2] - origin[2];
-    p1[0] = pt1[0] - origin[0];
-    p1[1] = pt1[1] - origin[1];
-    p1[2] = pt1[2] - origin[2];
+  p0[0] = pt0[0] - origin[0];
+  p0[1] = pt0[1] - origin[1];
+  p0[2] = pt0[2] - origin[2];
+  p1[0] = pt1[0] - origin[0];
+  p1[1] = pt1[1] - origin[1];
+  p1[2] = pt1[2] - origin[2];
 
-    u = (zaxis[0]*p0[0] + zaxis[1]*p0[1] + zaxis[2]*p0[2] + d) /
-      (zaxis[0]*(p0[0]-p1[0]) + zaxis[1]*(p0[1]-p1[1]) + zaxis[2]*(p0[2]-p1[2]));
+  u = (zaxis[0] * p0[0] + zaxis[1] * p0[1] + zaxis[2] * p0[2] + d) /
+      (zaxis[0] * (p0[0] - p1[0]) + zaxis[1] * (p0[1] - p1[1]) +
+          zaxis[2] * (p0[2] - p1[2]));
 
-    if (u>=0.0F && u<=1.0F) {
-        coords[0] = pt0[0] + (pt1[0]-pt0[0])*u;
-        coords[1] = pt0[1] + (pt1[1]-pt0[1])*u;
-        coords[2] = pt0[2] + (pt1[2]-pt0[2])*u;
-        tex_coords[0] = t0[0] + (t1[0]-t0[0])*u;
-        tex_coords[1] = t0[1] + (t1[1]-t0[1])*u;
-        tex_coords[2] = t0[2] + (t1[2]-t0[2])*u;
-        return 3;
-    }
-    return 0;
+  if (u >= 0.0F && u <= 1.0F) {
+    coords[0] = pt0[0] + (pt1[0] - pt0[0]) * u;
+    coords[1] = pt0[1] + (pt1[1] - pt0[1]) * u;
+    coords[2] = pt0[2] + (pt1[2] - pt0[2]) * u;
+    tex_coords[0] = t0[0] + (t1[0] - t0[0]) * u;
+    tex_coords[1] = t0[1] + (t1[1] - t0[1]) * u;
+    tex_coords[2] = t0[2] + (t1[2] - t0[2]) * u;
+    return 3;
+  }
+  return 0;
 }
 
 /*========================================================================*/
@@ -1086,11 +1099,11 @@ int ObjectVolume::getNFrame() const
 }
 
 /*========================================================================*/
-ObjectVolume::ObjectVolume(PyMOLGlobals * G) : pymol::CObject(G)
+ObjectVolume::ObjectVolume(PyMOLGlobals* G)
+    : pymol::CObject(G)
 {
   type = cObjectVolume;
 }
-
 
 /*========================================================================*/
 ObjectVolumeState::ObjectVolumeState(PyMOLGlobals* G)
@@ -1100,29 +1113,25 @@ ObjectVolumeState::ObjectVolumeState(PyMOLGlobals* G)
 {
 }
 
-
 /*========================================================================*/
-ObjectVolume *ObjectVolumeFromXtalSym(PyMOLGlobals * G, ObjectVolume * obj, ObjectMap * map,
-                                  CSymmetry * sym,
-                                  int map_state,
-                                  int state, float *mn, float *mx,
-                                  float level, int box_mode,
-                                  float carve, float *vert_vla,
-                                  int quiet)
+ObjectVolume* ObjectVolumeFromXtalSym(PyMOLGlobals* G, ObjectVolume* obj,
+    ObjectMap* map, CSymmetry* sym, int map_state, int state, float* mn,
+    float* mx, float level, int box_mode, float carve, float* vert_vla,
+    int quiet)
 {
-  ObjectVolume *I;
-  ObjectVolumeState *vs;
-  ObjectMapState *oms;
+  ObjectVolume* I;
+  ObjectVolumeState* vs;
+  ObjectMapState* oms;
   int created = !obj;
 
-  if(created) {
+  if (created) {
     I = new ObjectVolume(G);
   } else {
     I = obj;
   }
-  if(state < 0)
+  if (state < 0)
     state = I->State.size();
-  if(I->State.size() <= state) {
+  if (I->State.size() <= state) {
     VecCheckEmplace(I->State, state, G);
   }
   vs = &I->State[state];
@@ -1134,23 +1143,23 @@ ObjectVolume *ObjectVolumeFromXtalSym(PyMOLGlobals * G, ObjectVolume * obj, Obje
 #if 0
   vs->VolumeMode = meshMode;
 #endif
-  if(oms) {
+  if (oms) {
 
-    copy3f(mn, vs->ExtentMin);  /* this is not exactly correct...should actually take vertex points from range */
+    copy3f(mn, vs->ExtentMin); /* this is not exactly correct...should actually
+                                  take vertex points from range */
     copy3f(mx, vs->ExtentMax);
 
-    if(!oms->Matrix.empty()) {
+    if (!oms->Matrix.empty()) {
       ObjectStateSetMatrix(vs, oms->Matrix.data());
-    } else if(!vs->Matrix.empty()) {
+    } else if (!vs->Matrix.empty()) {
       ObjectStateResetMatrix(vs);
     }
 
     {
       float *min_ext, *max_ext;
       float tmp_min[3], tmp_max[3];
-      if(MatrixInvTransformExtentsR44d3f(vs->Matrix.data(),
-                                         vs->ExtentMin, vs->ExtentMax,
-                                         tmp_min, tmp_max)) {
+      if (MatrixInvTransformExtentsR44d3f(vs->Matrix.data(), vs->ExtentMin,
+              vs->ExtentMax, tmp_min, tmp_max)) {
         min_ext = tmp_min;
         max_ext = tmp_max;
       } else {
@@ -1158,10 +1167,11 @@ ObjectVolume *ObjectVolumeFromXtalSym(PyMOLGlobals * G, ObjectVolume * obj, Obje
         max_ext = vs->ExtentMax;
       }
 
-      if(sym && box_mode) {
+      if (sym && box_mode) {
         int eff_range[6];
 
-        IsosurfGetRange(G, oms->Field.get(), &oms->Symmetry->Crystal, min_ext, max_ext, eff_range, false);
+        IsosurfGetRange(G, oms->Field.get(), &oms->Symmetry->Crystal, min_ext,
+            max_ext, eff_range, false);
 
         {
           int fdim[3];
@@ -1173,19 +1183,20 @@ ObjectVolume *ObjectVolumeFromXtalSym(PyMOLGlobals * G, ObjectVolume * obj, Obje
           fdim[2] = eff_range[5] - eff_range[2];
           vs->Field = pymol::make_copyable<Isofield>(I->G, fdim);
 
-          expand_result =
-            IsosurfExpand(oms->Field.get(), vs->Field.get(), &oms->Symmetry->Crystal, sym, eff_range);
+          expand_result = IsosurfExpand(oms->Field.get(), vs->Field.get(),
+              &oms->Symmetry->Crystal, sym, eff_range);
 
-          if(expand_result == 0) {
-            if(!quiet) {
+          if (expand_result == 0) {
+            if (!quiet) {
               PRINTFB(G, FB_ObjectVolume, FB_Warnings)
-                " ObjectVolume-Warning: no symmetry expanded map points found.\n" ENDFB(G);
+              " ObjectVolume-Warning: no symmetry expanded map points "
+              "found.\n" ENDFB(G);
             }
           } else {
-            if(!quiet) {
+            if (!quiet) {
               PRINTFB(G, FB_ObjectVolume, FB_Warnings)
-                " ObjectVolume-Warning: not all symmetry expanded points covered by map.\n"
-                ENDFB(G);
+              " ObjectVolume-Warning: not all symmetry expanded points covered "
+              "by map.\n" ENDFB(G);
             }
           }
         }
@@ -1204,30 +1215,26 @@ ObjectVolume *ObjectVolumeFromXtalSym(PyMOLGlobals * G, ObjectVolume * obj, Obje
   return (I);
 }
 
-
 /*========================================================================*/
-ObjectVolume *ObjectVolumeFromBox(PyMOLGlobals * G, ObjectVolume * obj, ObjectMap * map,
-                              int map_state,
-                              int state, float *mn, float *mx,
-                              float level, int meshMode,
-                              float carve, float *vert_vla, int quiet)
+ObjectVolume* ObjectVolumeFromBox(PyMOLGlobals* G, ObjectVolume* obj,
+    ObjectMap* map, int map_state, int state, float* mn, float* mx, float level,
+    int meshMode, float carve, float* vert_vla, int quiet)
 {
   return ObjectVolumeFromXtalSym(G, obj, map, nullptr, map_state, state, mn, mx,
       level, meshMode, carve, vert_vla, quiet);
 }
 
-
 /*========================================================================*/
 
-void ObjectVolumeRecomputeExtent(ObjectVolume * I)
+void ObjectVolumeRecomputeExtent(ObjectVolume* I)
 {
   int extent_flag = false;
 
-  for(int a = 0; a < I->State.size(); a++) {
+  for (int a = 0; a < I->State.size(); a++) {
     auto vs = &I->State[a];
-    if(vs->Active) {
-      if(vs->ExtentFlag) {
-        if(!extent_flag) {
+    if (vs->Active) {
+      if (vs->ExtentFlag) {
+        if (!extent_flag) {
           extent_flag = true;
           copy3f(vs->ExtentMax, I->ExtentMax);
           copy3f(vs->ExtentMin, I->ExtentMin);
@@ -1241,18 +1248,16 @@ void ObjectVolumeRecomputeExtent(ObjectVolume * I)
 
   I->ExtentFlag = extent_flag;
 
-  if(I->TTTFlag && I->ExtentFlag) {
-    const float *ttt;
+  if (I->TTTFlag && I->ExtentFlag) {
+    const float* ttt;
     double tttd[16];
-    if(ObjectGetTTT(I, &ttt, -1)) {
+    if (ObjectGetTTT(I, &ttt, -1)) {
       convertTTTfR44d(ttt, tttd);
-      MatrixTransformExtentsR44d3f(tttd,
-                                   I->ExtentMin, I->ExtentMax,
-                                   I->ExtentMin, I->ExtentMax);
+      MatrixTransformExtentsR44d3f(
+          tttd, I->ExtentMin, I->ExtentMax, I->ExtentMin, I->ExtentMax);
     }
   }
 }
-
 
 /*==============================================================================*/
 PyObject* ObjectVolumeGetRamp(ObjectVolume* I, int state)
@@ -1262,7 +1267,7 @@ PyObject* ObjectVolumeGetRamp(ObjectVolume* I, int state)
     return (PConvAutoNone(nullptr));
   }
   if (auto ovs = static_cast<ObjectVolumeState*>(I->getObjectState(state))) {
-    if(!ovs->isUpdated)
+    if (!ovs->isUpdated)
       I->update();
 
     return PConvFloatArrayToPyList(ovs->Ramp.data(), ovs->Ramp.size());
@@ -1271,7 +1276,8 @@ PyObject* ObjectVolumeGetRamp(ObjectVolume* I, int state)
 }
 
 /*==============================================================================*/
-pymol::Result<> ObjectVolumeSetRamp(ObjectVolume* I, std::vector<float>&& ramp_list, int state)
+pymol::Result<> ObjectVolumeSetRamp(
+    ObjectVolume* I, std::vector<float>&& ramp_list, int state)
 {
   /* TODO: Allow for multi-state maps? */
   if (!I) {

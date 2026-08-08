@@ -166,9 +166,9 @@ public:
 
   template <typename T, typename... TArgs>
   T * newGPUBuffer(TArgs&&... args) {
-    std::hash<gpuBuffer_t *> hash_fn;
+    std::hash<GPUBuffer *> hash_fn;
     T * buffer = new T(std::forward<TArgs>(args)...);
-    auto bufptr = dynamic_cast<gpuBuffer_t *>(buffer);
+    auto bufptr = dynamic_cast<GPUBuffer *>(buffer);
     const size_t hashid = hash_fn(bufptr);
     buffer->set_hash_id(hashid);
     _gpu_object_map[hashid] = buffer;
@@ -176,10 +176,14 @@ public:
   }
 
   template <typename T>
-  T * getGPUBuffer(size_t hashid) {
-    auto search = _gpu_object_map.find(hashid);
+  T* getGPUBuffer(size_t hashid) {
+    return dynamic_cast<T*>(getGPUBuffer(hashid));
+  }
+
+  GPUBuffer* getGPUBuffer(size_t hashid) {
+     auto search = _gpu_object_map.find(hashid);
     if (search != _gpu_object_map.end())
-      return dynamic_cast<T*>(search->second);
+      return search->second;
     else
       return nullptr;
   }
@@ -313,7 +317,7 @@ public:
 private:
   ShaderPreprocessor m_shaderPreprocessor;
 
-  std::unordered_map<size_t, gpuBuffer_t*> _gpu_object_map;
+  std::unordered_map<size_t, GPUBuffer*> _gpu_object_map;
   std::vector<size_t> _gpu_objects_to_free_vector;
 public:
   std::map<std::string, CShaderPrg*> programs;

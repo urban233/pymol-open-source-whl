@@ -221,6 +221,7 @@ set(ALL_SRC
         layer0/ContourSurf.cpp
         layer0/Crystal.cpp
         layer0/Err.cpp
+        layer0/Error.cpp
         layer0/Feedback.cpp
         layer0/Field.cpp
         layer0/File.cpp
@@ -278,6 +279,7 @@ set(ALL_SRC
         layer1/Ortho.cpp
         layer1/P.cpp
         layer1/PConv.cpp
+        layer1/Property.cpp
         layer1/Picking.cpp
         layer1/Pop.cpp
         layer1/PyMOLObject.cpp
@@ -353,6 +355,7 @@ set(ALL_SRC
         layer2/SculptCache.cpp
         layer2/SideChainHelper.cpp
         layer2/VFont.cpp
+        layer2/USalign.cpp
         layer3/AtomIterators.cpp
         layer3/CifDataValueFormatter.cpp
         layer3/Editor.cpp
@@ -375,6 +378,7 @@ set(ALL_SRC
         layer5/PyMOL.cpp
         layer5/TestPyMOL.cpp
         layer5/main.cpp
+        layerGraphics/gl/GLVertexBuffer.cpp
         ov/src/OVContext.cpp
         ov/src/OVHeap.cpp
         ov/src/OVHeapArray.cpp
@@ -405,6 +409,7 @@ target_compile_definitions(_cmd PUBLIC ${ALL_COMPILER_DEFS})
 # ----- Include section
 set (ALL_INCLUDE_DIR
         include
+        contrib/pocketfft
         contrib/uiuc/plugins/include
         contrib/uiuc/plugins/molfile_plugin/src
         ov/src
@@ -414,6 +419,8 @@ set (ALL_INCLUDE_DIR
         layer3
         layer4
         layer5
+        layerGraphics
+        layerGraphics/gl
         build/generated
         pre-built/include
         ${OS_SPECIFIC_INCLUDES}

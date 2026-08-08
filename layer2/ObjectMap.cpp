@@ -46,6 +46,7 @@ Z* -------------------------------------------------------------------
 #include"Executive.h"
 #include"Field.h"
 #include "Feedback.h"
+#include "Util2.h"
 
 #define n_space_group_numbers 231
 static const char * space_group_numbers[] = {
@@ -171,7 +172,7 @@ int ObjectMapStateGetExcludedStats(PyMOLGlobals * G, ObjectMapState * ms, float 
 
   /* make a new map from the VLA .............. */
   if(list_size)
-    voxelmap = MapNew(G, -cutoff, vert_vla, list_size, nullptr);
+    voxelmap = new MapType(G, -cutoff, vert_vla, list_size, nullptr);
 
   if(voxelmap || (!list_size)) {
     int a, b, c;
@@ -364,8 +365,8 @@ int ObjectMapStateGetHistogram(PyMOLGlobals * G, ObjectMapState * ms,
  * @param state Object state (can be -2 for current state)
  * @return True if the map state exists and `result` has been written to
  */
-int ObjectMapInterpolate(ObjectMap * I, int state, const float *array, float *result, int *flag,
-                         int n)
+int ObjectMapInterpolate(ObjectMap* I, int state, const float* array,
+    float* result, std::uint8_t* flag, int n)
 {
   int ok = false;
   float txf_buffer[3];
@@ -1012,8 +1013,8 @@ int ObjectMapStateContainsPoint(ObjectMapState * ms, float *point)
  * indicating if points were within map bounds (optional, can be nullptr)
  * @return False if any coordinate was out of bounds
  */
-int ObjectMapStateInterpolate(ObjectMapState * ms, const float *array, float *result, int *flag,
-                              int n)
+int ObjectMapStateInterpolate(
+    ObjectMapState* ms, const float* array, float* result, std::uint8_t* flag, int n)
 {
   int ok = true;
   const float *inp;
@@ -4865,7 +4866,7 @@ static pymol::Result<std::unique_ptr<ObjectMapState>> ObjectMapDXStrToMap(
     PyMOLGlobals* G, const char* DXStr, int bytes, bool quiet)
 {
   if (DXStr[0] == '\x1f' && DXStr[1] == '\x8b') {
-    return pymol::Error("gzipped data not supported");
+    return pymol::make_error("gzipped data not supported");
   }
 
   enum {
@@ -4920,7 +4921,7 @@ static pymol::Result<std::unique_ptr<ObjectMapState>> ObjectMapDXStrToMap(
   }
 
   if (stage != 1) {
-    return pymol::Error("missing 'object 1 class gridpositions count' line");
+    return pymol::make_error("missing 'object 1 class gridpositions count' line");
   }
 
   {
@@ -4952,7 +4953,7 @@ static pymol::Result<std::unique_ptr<ObjectMapState>> ObjectMapDXStrToMap(
   }
 
   if (stage != 2) {
-    return pymol::Error("missing 'origin'");
+    return pymol::make_error("missing 'origin'");
   }
 
   {
@@ -4982,7 +4983,7 @@ static pymol::Result<std::unique_ptr<ObjectMapState>> ObjectMapDXStrToMap(
           delta + delta_i,
           delta + delta_i + 1,
           delta + delta_i + 2)) {
-      return pymol::Error("expected 3 floats");
+      return pymol::make_error("expected 3 floats");
     }
 
     p = ParseNextLine(p);
@@ -5011,7 +5012,7 @@ static pymol::Result<std::unique_ptr<ObjectMapState>> ObjectMapDXStrToMap(
   }
 
   if (stage != 3) {
-    return pymol::Error("missing 'delta'");
+    return pymol::make_error("missing 'delta'");
   }
 
   {
@@ -5039,7 +5040,7 @@ static pymol::Result<std::unique_ptr<ObjectMapState>> ObjectMapDXStrToMap(
           } else if (strcmp(cc_type, "float") == 0) {
             data_type = BINARY_FLOAT;
           } else {
-            return pymol::Error(
+            return pymol::make_error(
                 pymol::string_format("type '%s' not supported", cc_type));
           }
         }
@@ -5053,7 +5054,7 @@ static pymol::Result<std::unique_ptr<ObjectMapState>> ObjectMapDXStrToMap(
   }
 
   if (stage != 4) {
-    return pymol::Error("missing 'object . class array'");
+    return pymol::make_error("missing 'object . class array'");
   }
 
   PRINTFB(G, FB_ObjectMap, FB_Details)

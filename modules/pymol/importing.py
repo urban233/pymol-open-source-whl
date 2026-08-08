@@ -706,8 +706,6 @@ SEE ALSO
 
     save, load_traj, fetch
         '''
-        if object_props or atom_props:
-            print(' Warning: properties are not supported in Open-Source PyMOL')
         with _self.lockcm:
             plugin = ''
             state = int(state)
@@ -886,8 +884,6 @@ NOTES
     This approach only works with text data files.
     
     '''
-        if object_props or atom_props:
-            print(' Warning: properties are not supported in Open-Source PyMOL')
         list = _self._parser.get_embedded(key)
         if list is None:
             print("Error: embedded data '%s' not found."%key)
@@ -961,8 +957,6 @@ NOTES
     no overlapping atoms in the file being loaded.  "discrete"
     objects save memory but can not be edited.
         '''
-        if object_props:
-            print(' Warning: properties are not supported in Open-Source PyMOL')
         with _self.lockcm:
             return _cmd.load(_self._COb, str(name), None, sdfstr, int(state) - 1,
                               loadable.sdf2str,int(finish),int(discrete),

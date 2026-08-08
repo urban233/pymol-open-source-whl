@@ -40,7 +40,7 @@ TEST_CASE("Result template", "[Result]")
 static
 pymol::Result<int> sumError(int i, int j)
 {
-  return pymol::Error{"Values cannot be summed."};
+  return pymol::make_error("Values cannot be summed.");
 }
 
 TEST_CASE("Err Message", "[Result]")

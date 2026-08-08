@@ -110,7 +110,7 @@ typedef struct {
   float skip[3];
 } RayInfo;
 
-typedef struct {
+struct BasisCallRec {
   CBasis *Basis;
   RayInfo *rr;
   int except1, except2;         /* primitives to avoid */
@@ -124,20 +124,18 @@ typedef struct {
   int check_interior;
   int label_shadow_mode;
   CPrimitive *prim;
-  MapCache cache;
+  MapCacheType cache{};
   float fudge0, fudge1;
   /* returns */
   int interior_flag;
   int pass;
   float back_dist;
-} BasisCallRec;
+};
 
-int BasisInit(PyMOLGlobals * G, CBasis * I, int group_id);
-void BasisFinish(CBasis * I, int group_id);
-int BasisMakeMap(CBasis * I, int *vert2prim, CPrimitive * prim, int n_prim,
-		 float *volume,
-		 int group_id, int block_base,
-		 int perspective, float front, float size_hint);
+int BasisInit(PyMOLGlobals * G, CBasis * I);
+void BasisFinish(CBasis * I);
+int BasisMakeMap(CBasis* I, int* vert2prim, CPrimitive* prim, int n_prim,
+    float* volume, int perspective, float front, float size_hint);
 
 void BasisSetupMatrix(CBasis * I);
 void BasisGetTriangleNormal(CBasis * I, RayInfo * r, int i, float *fc, int perspective);

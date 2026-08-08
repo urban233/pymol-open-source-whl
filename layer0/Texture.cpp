@@ -46,7 +46,7 @@ constexpr std::uint8_t GlobalTextTextureUnit = 3;
 
 struct CTexture {
   std::unordered_set<int> texturedCharIDs; // set of char ids that have been textured
-  std::unique_ptr<textureBuffer_t> texture;
+  std::unique_ptr<TextureGL> texture;
   int xpos{};
   int ypos{};
   int maxypos{};
@@ -103,7 +103,7 @@ void TextureInitTextTextureImpl(PyMOLGlobals *G, int textureSizeArg){
   if (!I->texture) {
     using namespace tex;
     I->texture =
-        std::make_unique<textureBuffer_t>(format::RGBA, data_type::UBYTE,
+        std::make_unique<TextureGL>(format::RGBA, data_type::UBYTE,
             filter::NEAREST, filter::NEAREST, wrap::CLAMP, wrap::CLAMP);
     is_new = true;
   }
@@ -206,7 +206,7 @@ bool TextureIsCharTextured(PyMOLGlobals* G, int char_id, float* extent)
         if (!I->texture) {
           using namespace tex;
           I->texture =
-              std::make_unique<textureBuffer_t>(format::RGBA, data_type::UBYTE,
+              std::make_unique<TextureGL>(format::RGBA, data_type::UBYTE,
                   filter::NEAREST, filter::NEAREST, wrap::CLAMP, wrap::CLAMP);
         }
 	if (I->texture) {

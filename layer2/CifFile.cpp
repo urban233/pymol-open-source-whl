@@ -27,6 +27,8 @@
 #include <msgpack.hpp>
 #endif
 
+using namespace pymol::cif;
+
 namespace pymol {
 namespace _cif_detail {
 
@@ -232,6 +234,9 @@ const char* cif_data::code() const
 {
   if (auto data = std::get_if<pymol::cif_detail::cif_str_data>(&m_data)) {
     return data->m_code ? data->m_code : "";
+  }
+  if (auto data = std::get_if<pymol::cif_detail::bcif_data>(&m_data)) {
+    return data->m_code.c_str();
   }
   return "";
 }
@@ -484,17 +489,6 @@ bool cif_file::parse(char*&& p) {
 
 
 #if !defined(_PYMOL_NO_MSGPACKC)
-enum class DataTypes
-{
-  Int8 = 1,
-  Int16 = 2,
-  Int32 = 3,
-  UInt8 = 4,
-  UInt16 = 5,
-  UInt32 = 6,
-  Float32 = 32,
-  Float64 = 33,
-};
 
 template <typename T>
 void decodeAndPushBack(const std::vector<unsigned char>& bytes, std::size_t& i,
@@ -747,6 +741,7 @@ bool cif_file::parse_bcif(const char* bytes, std::size_t size)
     auto header = blockMap["header"].as<std::string>();
     auto categoriesRaw = blockMap["categories"].as<std::vector<msgpack::object>>();
     auto& categoriesData = m_datablocks[header].m_data.emplace<pymol::cif_detail::bcif_data>();
+    categoriesData.m_code = header;  // Needed for multiplexing
     for (const auto& category : categoriesRaw) {
       auto categoryMap = category.as<std::map<std::string, msgpack::object>>();
       auto categoryName = categoryMap["name"].as<std::string>();

@@ -628,7 +628,7 @@ Rep* RepMesh::recolor()
       I->VC = pymol::malloc<float>(3 * I->NTot);
     vc = I->VC;
     /* now, assign colors to each point */
-    map = MapNew(G, I->max_vdw + probe_radius, cs->Coord, cs->NIndex, nullptr);
+    map = new MapType(G, I->max_vdw + probe_radius, cs->Coord, cs->NIndex, nullptr);
     if(map) {
       MapSetupExpress(map);
       for(a = 0; a < I->NTot; a++) {
@@ -849,7 +849,7 @@ Rep *RepMeshNew(CoordSet * cs, int state)
         }
       }
       if(ok && nc) {
-        trim_map = MapNew(G, trim_cutoff, trim_vla, nc, nullptr);
+        trim_map = new MapType(G, trim_cutoff, trim_vla, nc, nullptr);
 	CHECKOK(ok, trim_map);
         if(ok) {
           ok &= MapSetupExpress(trim_map);
@@ -960,8 +960,8 @@ Rep *RepMeshNew(CoordSet * cs, int state)
     if(ok && !solv_acc)
       ok &= RepMeshGetSolventDots(I, cs, minE, maxE, probe_radius);
     if(ok) {
-      smap = MapNew(G, probe_radius, I->Dot, I->NDot, nullptr);
-      map = MapNew(G, I->max_vdw + probe_radius, cs->Coord, cs->NIndex, nullptr);
+      smap = new MapType(G, probe_radius, I->Dot, I->NDot, nullptr);
+      map = new MapType(G, I->max_vdw + probe_radius, cs->Coord, cs->NIndex, nullptr);
     }
     if(ok && map && smap) {
       ok &= MapSetupExpress(smap);
@@ -1227,7 +1227,7 @@ int RepMeshGetSolventDots(RepMesh * I, CoordSet * cs, float *min, float *max,
   probe_radius_plus = probe_radius * 1.5F;
 
   I->NDot = 0;
-  map = MapNew(G, I->max_vdw + probe_radius, cs->Coord, cs->NIndex, nullptr);
+  map = new MapType(G, I->max_vdw + probe_radius, cs->Coord, cs->NIndex, nullptr);
   if(map) {
     MapSetupExpress(map);
     maxCnt = 0;
@@ -1306,7 +1306,7 @@ int RepMeshGetSolventDots(RepMesh * I, CoordSet * cs, float *min, float *max,
     }
     dot_flag[maxDot] = 1;       /* this guarantees that we have a valid dot */
 
-    map = MapNew(G, probe_radius_plus, I->Dot, I->NDot, nullptr);
+    map = new MapType(G, probe_radius_plus, I->Dot, I->NDot, nullptr);
     if(map) {
       MapSetupExpress(map);
 

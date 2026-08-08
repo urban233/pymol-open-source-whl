@@ -1692,8 +1692,8 @@ const char *CShaderMgr::GetAttributeName(int uid)
 // SceneRenderBindToOffscreen
 void CShaderMgr::bindOffscreen(int width, int height, GridInfo *grid) {
   using namespace tex;
-  renderTarget_t::shape_type req_size(width, height);
-  renderTarget_t* rt = nullptr;
+  RenderTargetGL::shape_type req_size(width, height);
+  RenderTargetGL* rt = nullptr;
 
 #ifndef _PYMOL_NO_AA_SHADERS
 #endif
@@ -1701,11 +1701,11 @@ void CShaderMgr::bindOffscreen(int width, int height, GridInfo *grid) {
   // Doesn't exist, create
   if (!offscreen_rt) {
     CGOFree(G->Scene->offscreenCGO);
-    rt = newGPUBuffer<renderTarget_t>(req_size);
+    rt = newGPUBuffer<RenderTargetGL>(req_size);
     rt->layout({ { 4, rt_layout_t::UBYTE } });
     offscreen_rt = rt->get_hash_id();
   } else {
-    rt = getGPUBuffer<renderTarget_t>(offscreen_rt);
+    rt = getGPUBuffer<RenderTargetGL>(offscreen_rt);
 
     // resize
     if (req_size != rt->size()) {
@@ -1731,11 +1731,11 @@ void CShaderMgr::bindOffscreen(int width, int height, GridInfo *grid) {
 void CShaderMgr::bindOffscreenOIT(int width, int height, int drawbuf) {
   using namespace tex;
 
-  renderTarget_t::shape_type req_size(width, height);
+  RenderTargetGL::shape_type req_size(width, height);
 
   if(!oit_pp || oit_pp->size() != req_size) {
     oit_pp = std::make_unique<OIT_PostProcess>(
-        width, height, getGPUBuffer<renderTarget_t>(offscreen_rt)->_rbo);
+        width, height, getGPUBuffer<RenderTargetGL>(offscreen_rt)->_rbo);
   } else {
     if (!TM3_IS_ONEBUF) {
       drawbuf = 1;
@@ -1746,17 +1746,17 @@ void CShaderMgr::bindOffscreenOIT(int width, int height, int drawbuf) {
 
 GLFramebufferConfig CShaderMgr::bindOffscreenOrtho(const Extent2D& extent, bool clear) {
   using namespace tex;
-  renderTarget_t::shape_type req_size(extent.width, extent.height);
+  RenderTargetGL::shape_type req_size(extent.width, extent.height);
   if (!offscreen_ortho_rt) {
-    auto rt = newGPUBuffer<renderTarget_t>(req_size);
+    auto rt = newGPUBuffer<RenderTargetGL>(req_size);
     rt->layout({ { 4, rt_layout_t::UBYTE } });
     offscreen_ortho_rt = rt->get_hash_id();
   }
 
-  auto rt = getGPUBuffer<renderTarget_t>(offscreen_ortho_rt);
+  auto rt = getGPUBuffer<RenderTargetGL>(offscreen_ortho_rt);
   if (rt->size() != req_size) {
     freeGPUBuffer(offscreen_ortho_rt);
-    rt = newGPUBuffer<renderTarget_t>(req_size);
+    rt = newGPUBuffer<RenderTargetGL>(req_size);
     rt->layout({ { 4, rt_layout_t::UBYTE } });
     offscreen_ortho_rt = rt->get_hash_id();
   }
@@ -1771,16 +1771,16 @@ GLFramebufferConfig CShaderMgr::bindOffscreenSizedImage(
     const Extent2D& extent, bool clear)
 {
   using namespace tex;
-  renderTarget_t::shape_type req_size(extent.width, extent.height);
+  RenderTargetGL::shape_type req_size(extent.width, extent.height);
   if (!offscreen_sized_image_rt) {
-    auto rt = newGPUBuffer<renderTarget_t>(req_size);
+    auto rt = newGPUBuffer<RenderTargetGL>(req_size);
     rt->layout({{4, rt_layout_t::UBYTE}});
     offscreen_sized_image_rt = rt->get_hash_id();
   }
-  auto rt = getGPUBuffer<renderTarget_t>(offscreen_sized_image_rt);
+  auto rt = getGPUBuffer<RenderTargetGL>(offscreen_sized_image_rt);
   if (rt->size() != req_size) {
     freeGPUBuffer(offscreen_sized_image_rt);
-    rt = newGPUBuffer<renderTarget_t>(req_size);
+    rt = newGPUBuffer<RenderTargetGL>(req_size);
     rt->layout({{4, rt_layout_t::UBYTE}});
     offscreen_sized_image_rt = rt->get_hash_id();
   }
@@ -1793,7 +1793,7 @@ GLFramebufferConfig CShaderMgr::bindOffscreenSizedImage(
 
 void CShaderMgr::activateOffscreenTexture(GLuint textureIdx) {
   glActiveTexture(GL_TEXTURE0 + textureIdx);
-  auto t = getGPUBuffer<renderTarget_t>(offscreen_rt);
+  auto t = getGPUBuffer<RenderTargetGL>(offscreen_rt);
   if (t->_textures[0])
     t->_textures[0]->bind();
 }
@@ -1826,13 +1826,14 @@ void CShaderMgr::setDrawBuffer(GLFramebufferConfig config)
   if (config.drawBuffer == GL_BACK) {
     config = defaultBackbuffer;
   }
-  if (config.framebuffer == defaultBackbuffer.framebuffer) {
+  if (glBindFramebuffer != nullptr &&
+      config.framebuffer == defaultBackbuffer.framebuffer) {
     glBindFramebuffer(GL_FRAMEBUFFER, config.framebuffer);
     setDrawBuffer(config.drawBuffer);
     return;
   }
 
-  if (auto rt = getGPUBuffer<renderTarget_t>(config.framebuffer)) {
+  if (auto rt = getGPUBuffer<RenderTargetGL>(config.framebuffer)) {
     rt->bind(false);
   }
 }
@@ -1854,7 +1855,7 @@ std::vector<unsigned char> CShaderMgr::readPixelsFrom(
     glBindFramebuffer(GL_READ_FRAMEBUFFER, OpenGLDefaultFramebufferID);
     glReadBuffer(srcConfig.drawBuffer);
   } else {
-    if (auto rt = getGPUBuffer<renderTarget_t>(srcConfig.framebuffer)) {
+    if (auto rt = getGPUBuffer<RenderTargetGL>(srcConfig.framebuffer)) {
       // TODO: bindOnlyAsRead
       rt->fbo()->bind();
     }
@@ -1882,7 +1883,7 @@ void CShaderMgr::drawPixelsTo(PyMOLGlobals* G, const Rect2D& rect,
   if (dstConfig.framebuffer == OpenGLDefaultFramebufferID) {
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, dstConfig.framebuffer);
   } else {
-    if (auto rt = getGPUBuffer<renderTarget_t>(dstConfig.framebuffer)) {
+    if (auto rt = getGPUBuffer<RenderTargetGL>(dstConfig.framebuffer)) {
       // TODO: bindOnlyAsDraw?
       rt->fbo()->bind();
     }

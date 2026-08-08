@@ -188,7 +188,7 @@ int ObjectMotionModify(pymol::CObject* I, ViewElemAction action, int index,
 void ObjectMotionReinterpolate(pymol::CObject *I);
 int ObjectMotionGetLength(pymol::CObject *I);
 
-typedef struct _CObjectUpdateThreadInfo CObjectUpdateThreadInfo;
+struct CObjectUpdateThreadInfo;
 
 #define cObjectTypeAll                    0
 #define cObjectTypeObjects                1

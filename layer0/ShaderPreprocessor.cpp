@@ -9,6 +9,7 @@
 #include "PyMOLGlobals.h"
 #include "Setting.h"
 #include "pymol/utility.h"
+#include "Util2.h"
 
 enum class PreProcType : std::uint32_t {
   Ifdef = 1 << 0,

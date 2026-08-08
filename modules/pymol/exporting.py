@@ -995,6 +995,7 @@ SEE ALSO
         'mae': get_str,
         'mol': get_str,
         'mmtf': get_bytes,
+        'bcif': get_bytes,
 
         'pse': get_psestr,
         'psw': get_psestr,

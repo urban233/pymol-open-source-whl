@@ -29,6 +29,13 @@ class TestQuerying(testing.PyMOLTestCase):
         # used in many tests
         pass
 
+    def testSelectDelocalized(self):
+        cmd.fragment("phe")
+        count = cmd.count_atoms("deloc.")
+        self.assertEqual(count, 8)
+        count = cmd.count_atoms("delocalized")
+        self.assertEqual(count, 8)
+
     def testCountFrames(self):
         self.assertEqual(cmd.count_frames(), 0)
         cmd.pseudoatom("m1")
@@ -332,6 +339,17 @@ class TestQuerying(testing.PyMOLTestCase):
         cmd.ramp_new('ramp1', 'none')  # non-molecular object
         self.assertEqual(cmd.get_object_list(), ['gly', 'cys'])
         self.assertEqual(cmd.get_object_list('elem S'), ['cys'])
+        self.assertEqual(cmd.get_object_list('none'), [])
+        # whitespace string is empty selection
+        self.assertEqual(cmd.get_object_list(' '), [])
+        # empty string is a falsy value
+        self.assertTrue(not cmd.get_object_list(''))
+        # empty string is empty selection
+        self.assertEqual(cmd.get_object_list(''), [])
+
+    def testGetObjectList__invalid_selection(self):
+        self.assertRaises(CmdException, cmd.get_object_list, 'invalid_selection_name')
+        self.assertRaises(CmdException, cmd.get_object_list, '(none')  # malformed
 
     @testing.requires_version('1.6')
     def testGetObjectMatrix(self):

@@ -62,6 +62,7 @@ Z* -------------------------------------------------------------------
 #include "ShaderMgr.h"
 #include "Feedback.h"
 #include "GFXManager.h"
+#include "Util2.h"
 
 #ifdef _PYMOL_OPENVR
 #include"OpenVRMode.h"
@@ -1354,7 +1355,7 @@ pymol::Result<> SceneClipFromMode(PyMOLGlobals* G, pymol::zstring_view mode, flo
 {
   auto plane = SceneClipGetEnum(mode);
   if (plane == SceneClipMode::Invalid) {
-    return pymol::Error("invalid clip mode");
+    return pymol::make_error("invalid clip mode");
   }
   SceneClip(G, plane, movement, sele.c_str(), state);
   return {};
@@ -1826,13 +1827,23 @@ pymol::Result<> SceneMakeSizedImage(PyMOLGlobals* G, Extent2D extent,
       renderInfo.offscreenConfig = offscreenFBO;
       G->ShaderMgr->setDrawBuffer(offscreenFBO);
 
+      // Top-level configs are used by PP shaders.
+      // Temporarily swap them out and restore.
+      // TODO: This ought to be done in a stack-manner
+      // in place of the GPUMgr's framegraph.
+      auto oldTLConfig = G->ShaderMgr->topLevelConfig;
+      G->ShaderMgr->topLevelConfig = offscreenFBO;
+
       // JJ: SceneSetViewport in SceneRender will extract the glViewport
       // rather than the Scene extent. Unsure why this is done, so for now
       // just preset the viewport.
       SceneSetViewport(G, viewport);
       SceneRender(G, renderInfo);
 
-      Rect2D srcRect {{}, extent};
+      G->ShaderMgr->topLevelConfig = oldTLConfig;
+
+      Rect2D srcRect{};
+      srcRect.extent = extent;
       auto image = GLImageToPyMOLImage(G, offscreenFBO, srcRect);
 
       if (!image.empty()) {
@@ -4591,7 +4602,7 @@ int SceneRovingCheckDirty(PyMOLGlobals * G)
   return (I->RovingDirtyFlag);
 }
 
-struct _CObjectUpdateThreadInfo {
+struct CObjectUpdateThreadInfo {
   pymol::CObject *obj;
 };
 

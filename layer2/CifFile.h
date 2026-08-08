@@ -298,6 +298,9 @@ public:
   /// Alias for as<double>()
   double as_d(unsigned pos = 0, double d = 0.) const { return as(pos, d); }
 
+  /// Alias for as<float>()
+  float as_f(unsigned pos = 0, float f = 0.0f) const { return static_cast<float>(as_d(pos, f)); }
+
   /**
    * Get a copy of the array.
    * @param d default value for unknown/inapplicable elements
@@ -377,7 +380,31 @@ public:
   const cif_detail::cif_str_data* get_saveframe(const char* code) const;
 };
 
+namespace cif
+{
+enum class DataTypes {
+  Int8 = 1,
+  Int16 = 2,
+  Int32 = 3,
+  UInt8 = 4,
+  UInt16 = 5,
+  UInt32 = 6,
+  Float32 = 32,
+  Float64 = 33,
+};
+} // namespace cif
+
 } // namespace pymol
+
+/**
+ * CIF parser which captures the last error message.
+ */
+class cif_file_with_error_capture : public pymol::cif_file
+{
+public:
+  std::string m_error_msg;
+  void error(const char* msg) override { m_error_msg = msg; }
+};
 
 #endif
 // vi:sw=2:ts=2

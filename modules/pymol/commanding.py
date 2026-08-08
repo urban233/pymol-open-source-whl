@@ -13,6 +13,7 @@
 #Z* -------------------------------------------------------------------
 
 from pymol.shortcut import Shortcut
+from pymol.parser import __file__ as _parser_filename
 
 if True:
 
@@ -23,13 +24,16 @@ if True:
         from io import FileIO as file
 
     import inspect
-    import glob
     import shlex
+    import builtins
     from enum import Enum
+    if sys.version_info >= (3, 11):
+        from enum import StrEnum
     from functools import wraps
     from pathlib import Path
     from textwrap import dedent
-    from typing import List
+    from typing import get_args, Union, Any, get_origin, get_type_hints
+    from types import UnionType
 
     import re
     import os
@@ -598,96 +602,188 @@ SEE ALSO
             output = get_state_list(states)
             states_list = sorted(set(map(int, output)))
             return _cmd.delete_states(_self._COb, name, states_list)
+    
+        
+    class ArgumentParsingError(ValueError):
+        "Error on argument parsing."
 
-    class Selection(str):
-        pass
-
-
-    def _parse_bool(value: str):
-        if isinstance(value, str):
-            if value.lower() in ["yes", "1", "true", "on", "y"]:
+        def __init__(self, arg_name, message):
+            message = dedent(message).strip()
+            if arg_name:
+                s = f"Failed at parsing '{arg_name}'. {message}"
+            else:
+                s = message
+            super().__init__(s)
+    
+    
+    def _into_types(var, type, value):
+        
+        # Untyped string
+        if type == Any:
+            return value
+                
+        # Boolean flags
+        elif type is bool:
+            if isinstance(value, bool):
+                return value
+            trues = ["yes", "1", "true", "on", "y"]
+            falses = ["no", "0", "false", "off", "n"]
+            if value.lower() in trues:
                 return True
-            elif value.lower() in ["no", "0", "false", "off", "n"]:
+            elif value.lower() in falses:
                 return False
             else:
-                raise Exception("Invalid boolean value: %s" % value)
-        elif isinstance(value, bool):
+                raise ArgumentParsingError(
+                    var,
+                    f"Can't parse {value!r} as bool."
+                    f" Supported true values are {', '.join(trues)}."
+                    f" Supported false values are {', '.join(falses)}."
+                )
+        
+        # Types from typing module
+        elif origin := get_origin(type):
+
+            if origin in {Union, UnionType}:
+                funcs = get_args(type)
+                for func in funcs:
+                    try:
+                        return _into_types(None, func, value)
+                    except:
+                        continue
+                raise ArgumentParsingError(
+                    var,
+                    f"Can't parse {value!r} into {type}."
+                    f" The parser tried each union type and none was suitable."
+                )
+            
+            elif issubclass(origin, tuple):
+                funcs = get_args(type)
+                if funcs:
+                    values = shlex.split(value)
+                    if len(funcs) > 0 and len(funcs) != len(values):
+                        raise ArgumentParsingError(
+                            var,
+                            f"Can't parse {value!r} into {type}."
+                            f" The number of tuple arguments are incorrect."
+                        )
+                    try:
+                        return tuple(_into_types(None, f, v) for f, v in zip(funcs, values))
+                    except:
+                        raise ArgumentParsingError(
+                            var,
+                            f"Can't parse {value!r} into {type}."
+                            f" One or more tuple values are of incorrect types."
+                        )
+                else:
+                    return tuple(shlex.split(value))
+
+            elif issubclass(origin, list):
+                funcs = get_args(type)
+                if len(funcs) == 1:
+                    func = funcs[0]
+                    return [_into_types(None, func, a) for a in shlex.split(value)]
+                return shlex.split(value)
+        
+        elif sys.version_info >= (3, 11) and issubclass(type, StrEnum):
+            try:
+                return type(value)
+            except:
+                names = [e.value for e in list(type)]
+                raise ArgumentParsingError(
+                    var,
+                    f"Invalid value for {type.__name__}."
+                    f" Accepted values are {', '.join(names)}."
+                )
+
+        # Specific types must go before other generic types
+        #   isinstance(type, builtins.type) comes after
+        elif issubclass(type, Enum):
+            value = type.__members__.get(value)
+            if value is None:
+                raise ArgumentParsingError(
+                    var,
+                    f"Invalid value for {type.__name__}."
+                    f" Accepted values are {', '.join(type.__members__)}."
+                )
             return value
-        else:
-            raise Exception(f"Unsuported boolean flag {value}")
+        
+        # Generic types must accept str as single argument to __init__(s)
+        elif isinstance(type, builtins.type):
+            try:
+                return type(value)
+            except Exception as exc:
+                raise ArgumentParsingError(
+                    var,
+                    f"Invalid value {value!r} for custom type {type.__name__}."
+                    f" The type must accept str as the solo argument to __init__(s)."
+                ) from exc
 
-    def _parse_list_str(value):
-        return shlex.split(value)
 
-    def _parse_list_int(value):
-        return list(map(int, shlex.split(value)))
+    def new_command(name, function=None, _self=cmd):
 
-    def _parse_list_float(value):
-        return list(map(float, shlex.split(value)))
-
-    def declare_command(name, function=None, _self=cmd):
         if function is None:
             name, function = name.__name__, name
-
-        # new style commands should have annotations
-        annotations = [a for a in function.__annotations__ if a != "return"]
-        if function.__code__.co_argcount != len(annotations):
-            raise Exception("Messy annotations")
 
         # docstring text, if present, should be dedented
         if function.__doc__ is not None:
             function.__doc__ = dedent(function.__doc__).strip()
 
+        # Resolve strings into real class objects (PEP 563).
+        try:
+            resolved_hints = get_type_hints(
+                function,
+                globalns=sys.modules[function.__module__].__dict__
+            )
+        except Exception:
+            resolved_hints = function.__annotations__
 
         # Analysing arguments
-        spec = inspect.getfullargspec(function)
-        kwargs_ = {}
-        args_ = spec.args[:]
-        defaults = list(spec.defaults or [])
-
-        args2_ = args_[:]
-        while args_ and defaults:
-            kwargs_[args_.pop(-1)] = defaults.pop(-1)
-
-        funcs = {}
-        for idx, (var, func) in enumerate(spec.annotations.items()):
-            funcs[var] = func
-
+        sign = inspect.signature(function)
+        
         # Inner function that will be callable every time the command is executed
         @wraps(function)
         def inner(*args, **kwargs):
-            frame = traceback.format_stack()[-2]
-            caller = frame.split("\"", maxsplit=2)[1]
-
+            caller = sys._getframe(1).f_code.co_filename
             # It was called from command line or pml script, so parse arguments
-            if caller.endswith("pymol/parser.py"):
-                kwargs = {**kwargs_, **kwargs, **dict(zip(args2_, args))}
+            if caller == _parser_filename:
+                # special _self argument
                 kwargs.pop("_self", None)
-                for arg in kwargs.copy():
-                    if funcs[arg] == bool:
-                        funcs[arg] = _parse_bool
-                    elif funcs[arg] == List[str]:
-                        funcs[arg] = _parse_list_str
-                    elif funcs[arg] == List[int]:
-                        funcs[arg] = _parse_list_int
-                    elif funcs[arg] == List[float]:
-                        funcs[arg] = _parse_list_float
+                new_kwargs = {}
+                for var, param in sign.parameters.items():
+                    if var in kwargs:
+                        value = kwargs[var]
+                        # special 'quiet' argument
+                        if var == 'quiet' and isinstance(value, int):
+                            new_kwargs[var] = bool(value)
+                        else:
+                            actual_type = resolved_hints.get(var, param.annotation)
+                            new_kwargs[var] = _into_types(var, actual_type, value)
                     else:
-                        # Assume it's a literal supported type
-                        pass
-                    # Convert the argument to the correct type
-                    kwargs[arg] = funcs[arg](kwargs[arg])
-                return function(**kwargs)
+                        if param.default is sign.empty:
+                            raise ArgumentParsingError(f"Unknow argument '{var}'.")
+                defaults = {
+                    k: v.default for k, v in sign.parameters.items()
+                    if v.default is not sign.empty
+                }
+                final_kwargs = {
+                    **defaults,
+                    **new_kwargs
+                }
+                return function(**final_kwargs)
 
             # It was called from Python, so pass the arguments as is
             else:
                 return function(*args, **kwargs)
-
-        name = function.__name__
-        _self.keyword[name] = [inner, 0, 0, ",", parsing.STRICT]
+        
+        _self.keyword[name] = [inner, 0, 0, ',', parsing.STRICT]
         _self.kwhash.append(name)
         _self.help_sc.append(name)
+        
+        # Accessor to the original function so bypass the stack extraction.
+        # The purpose is optimization (loops, for instance).
+        inner.func = inner.__wrapped__ 
         return inner
+
 
     def extend(name, function=None, _self=cmd):
 

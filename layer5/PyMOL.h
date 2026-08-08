@@ -103,20 +103,14 @@ extern "C" {
 
 /* configuration */
 
-#ifndef CPyMOLOptions_DEFINED
-typedef struct _CPyMOLOptions CPyMOLOptions;
-#define CPyMOLOptions_DEFINED
-#endif
+struct CPyMOLOptions;
 
 CPyMOLOptions *PyMOLOptions_New(void);
 void PyMOLOptions_Free(CPyMOLOptions * option);
 
 /* PyMOL instance type */
 
-#ifndef CPyMOL_DEFINED
 struct CPyMOL;
-#define CPyMOL_DEFINED
-#endif
 
 #define ATOM_PROP_MODEL 0
 #define ATOM_PROP_INDEX 1

@@ -31,7 +31,6 @@ Z* -------------------------------------------------------------------
 #include"Color.h"
 #include"Matrix.h"
 #include"P.h"
-#include"MemoryCache.h"
 #include"Character.h"
 #include"Text.h"
 #include"PyMOL.h"
@@ -595,11 +594,11 @@ int RayExpandPrimitives(CRay * I)
 
   basis = I->Basis;
 
-  VLACacheSize(I->G, basis->Vertex, float, 3 * nVert, 0, cCache_basis_vertex);
-  VLACacheSize(I->G, basis->Radius, float, nVert, 0, cCache_basis_radius);
-  VLACacheSize(I->G, basis->Radius2, float, nVert, 0, cCache_basis_radius2);
-  VLACacheSize(I->G, basis->Vert2Normal, int, nVert, 0, cCache_basis_vert2normal);
-  VLACacheSize(I->G, basis->Normal, float, 3 * nNorm, 0, cCache_basis_normal);
+  VLASize2<float>(basis->Vertex, 3 * nVert);
+  VLASize2<float>(basis->Radius, nVert);
+  VLASize2<float>(basis->Radius2, nVert);
+  VLASize2<int>(basis->Vert2Normal, nVert);
+  VLASize2<float>(basis->Normal, 3 * nNorm);
 
   I->Vert2Prim.resize(nVert);
 
@@ -849,29 +848,27 @@ int RayTransformFirst(CRay * I, int perspective, int identity)
   basis1 = I->Basis + 1;
 
   if (ok){
-    VLACacheSize(I->G, basis1->Vertex, float, 3 * basis0->NVertex, 1, cCache_basis_vertex);
+    VLASize2<float>(basis1->Vertex, 3 * basis0->NVertex);
     CHECKOK(ok, basis1->Vertex);
   }
   if (ok){
-    VLACacheSize(I->G, basis1->Normal, float, 3 * basis0->NNormal, 1, cCache_basis_normal);
+    VLASize2<float>(basis1->Normal, 3 * basis0->NNormal);
     CHECKOK(ok, basis1->Normal);
   }
   if (ok){
-    VLACacheSize(I->G, basis1->Precomp, float, 3 * basis0->NNormal, 1,
-		 cCache_basis_precomp);
+    VLASize2<float>(basis1->Precomp, 3 * basis0->NNormal);
     CHECKOK(ok, basis1->Precomp);
   }
   if (ok){
-    VLACacheSize(I->G, basis1->Vert2Normal, int, basis0->NVertex, 1,
-		 cCache_basis_vert2normal);
+    VLASize2<int>(basis1->Vert2Normal, basis0->NVertex);
     CHECKOK(ok, basis1->Vert2Normal);
   }
   if (ok){
-    VLACacheSize(I->G, basis1->Radius, float, basis0->NVertex, 1, cCache_basis_radius);
+    VLASize2<float>(basis1->Radius, basis0->NVertex);
     CHECKOK(ok, basis1->Radius);
   }
   if (ok){
-    VLACacheSize(I->G, basis1->Radius2, float, basis0->NVertex, 1, cCache_basis_radius2);
+    VLASize2<float>(basis1->Radius2, basis0->NVertex);
     CHECKOK(ok, basis1->Radius2);
   }
   ok &= !I->G->Interrupt;
@@ -956,7 +953,7 @@ int RayTransformFirst(CRay * I, int perspective, int identity)
 
 
 /*========================================================================*/
-static int RayTransformBasis(CRay * I, CBasis * basis1, int group_id)
+static int RayTransformBasis(CRay * I, CBasis * basis1)
 {
   CBasis *basis0;
   int a;
@@ -966,28 +963,22 @@ static int RayTransformBasis(CRay * I, CBasis * basis1, int group_id)
 
   basis0 = I->Basis + 1;
 
-  VLACacheSize(I->G, basis1->Vertex, float, 3 * basis0->NVertex, group_id,
-               cCache_basis_vertex);
+  VLASize2<float>(basis1->Vertex, 3 * basis0->NVertex);
   CHECKOK(ok, basis1->Vertex);
   if (ok)
-    VLACacheSize(I->G, basis1->Normal, float, 3 * basis0->NNormal, group_id,
-		 cCache_basis_normal);
+    VLASize2<float>(basis1->Normal, 3 * basis0->NNormal);
   CHECKOK(ok, basis1->Normal);
   if (ok)
-    VLACacheSize(I->G, basis1->Precomp, float, 3 * basis0->NNormal, group_id,
-		 cCache_basis_precomp);
+    VLASize2<float>(basis1->Precomp, 3 * basis0->NNormal);
   CHECKOK(ok, basis1->Precomp);
   if (ok)
-    VLACacheSize(I->G, basis1->Vert2Normal, int, basis0->NVertex, group_id,
-		 cCache_basis_vert2normal);
+    VLASize2<int>(basis1->Vert2Normal, basis0->NVertex);
   CHECKOK(ok, basis1->Vert2Normal);
   if (ok)
-    VLACacheSize(I->G, basis1->Radius, float, basis0->NVertex, group_id,
-		 cCache_basis_radius);
+    VLASize2<float>(basis1->Radius, basis0->NVertex);
   CHECKOK(ok, basis1->Radius);
   if (ok)
-    VLACacheSize(I->G, basis1->Radius2, float, basis0->NVertex, group_id,
-		 cCache_basis_radius2);
+    VLASize2<float>(basis1->Radius2, basis0->NVertex);
   CHECKOK(ok, basis1->Radius2);
   v0 = basis0->Vertex;
   v1 = basis1->Vertex;
@@ -2933,8 +2924,8 @@ static void RayAntiSpawn(CRayAntiThreadInfo * Thread, int n_thread)
 
 int RayHashThread(CRayHashThreadInfo * T)
 {
-  BasisMakeMap(T->basis, T->vert2prim, T->prim, T->n_prim, T->clipBox, T->phase,
-               cCache_ray_map, T->perspective, T->front, T->size_hint);
+  BasisMakeMap(T->basis, T->vert2prim, T->prim, T->n_prim, T->clipBox,
+               T->perspective, T->front, T->size_hint);
 
   /* utilize a little extra wasted CPU time in thread 0 which computes the smaller map... */
   if(!T->phase) {
@@ -3489,7 +3480,7 @@ int RayTraceThread(CRayThreadInfo * T)
   BasisCall[0].fudge0 = BasisFudge0;
   BasisCall[0].fudge1 = BasisFudge1;
 
-  MapCacheInit(&BasisCall[0].cache, I->Basis[1].Map, T->phase, cCache_map_scene_cache);
+  BasisCall[0].cache = MapCacheType(*I->Basis[1].Map);
 
   if(shadows && (n_basis > 2)) {
     int bc;
@@ -3508,8 +3499,7 @@ int RayTraceThread(CRayThreadInfo * T)
       BasisCall[bc].fudge0 = BasisFudge0;
       BasisCall[bc].fudge1 = BasisFudge1;
       BasisCall[bc].label_shadow_mode = label_shadow_mode;
-      MapCacheInit(&BasisCall[bc].cache, I->Basis[bc].Map, T->phase,
-                   cCache_map_shadow_cache);
+      BasisCall[bc].cache = MapCacheType(*I->Basis[bc].Map);
     }
   }
 
@@ -4504,14 +4494,6 @@ int RayTraceThread(CRayThreadInfo * T)
   }                             /* end of for */
   /*  if(T->n_thread>1) 
      printf(" Ray: Thread %d: Complete.\n",T->phase+1); */
-  MapCacheFree(&BasisCall[0].cache, T->phase, cCache_map_scene_cache);
-
-  if(shadows && (I->NBasis > 2)) {
-    int bc;
-    for(bc = 2; bc < I->NBasis; bc++) {
-      MapCacheFree(&BasisCall[bc].cache, T->phase, cCache_map_shadow_cache);
-    }
-  }
   return (n_hit);
 }
 
@@ -5564,7 +5546,7 @@ void RayRender(CRay * I, unsigned int *image, double timing,
     perspective = SettingGetGlobal_b(I->G, cSetting_ortho);
   perspective = !perspective;
 
-  VLACacheSize(I->G, I->Primitive, CPrimitive, I->NPrimitive, 0, cCache_ray_primitive);
+  VLASize2<CPrimitive>(I->Primitive, I->NPrimitive);
 #ifdef PROFILE_BASIS
   n_cells = 0;
   n_prims = 0;
@@ -5617,7 +5599,7 @@ void RayRender(CRay * I, unsigned int *image, double timing,
     height = (height + 2) * mag;
     image_copy = image;
     buffer_size = width * height;
-    image = CacheAlloc(I->G, unsigned int, buffer_size, 0, cCache_ray_antialias_buffer);
+    image = pymol::malloc<unsigned int>(buffer_size);
     ErrChkPtr(I->G, image);
   } else {
     buffer_size = width * height;
@@ -5803,7 +5785,7 @@ void RayRender(CRay * I, unsigned int *image, double timing,
       if(I->NBasis < 2)
 	I->NBasis = 2;
       for(bc = 2; ok && bc < I->NBasis; bc++) {
-        ok &= BasisInit(I->G, I->Basis + bc, bc);
+        ok &= BasisInit(I->G, I->Basis + bc);
       }
       for(bc = 2; ok && bc < I->NBasis; bc++) {
         {                       /* setup light & rotate if necessary  */
@@ -5865,7 +5847,7 @@ void RayRender(CRay * I, unsigned int *image, double timing,
 
         if(ok && shadows) {           /* don't waste time on shadows unless needed */
           BasisSetupMatrix(I->Basis + bc);
-          ok &= RayTransformBasis(I, I->Basis + bc, bc);
+          ok &= RayTransformBasis(I, I->Basis + bc);
         }
 	ok &= !I->G->Interrupt;
       }
@@ -5939,13 +5921,13 @@ void RayRender(CRay * I, unsigned int *image, double timing,
 #endif
       int* vert2prim_ptr = I->Vert2Prim.empty() ? nullptr : I->Vert2Prim.data();
       ok &= BasisMakeMap(I->Basis + 1, vert2prim_ptr, I->Primitive, I->NPrimitive,
-			 I->Volume, 0, cCache_ray_map, perspective, front, I->PrimSize);
+			 I->Volume, perspective, front, I->PrimSize);
       if(ok && shadows) {
         int bc;
         float factor = SettingGetGlobal_f(I->G, cSetting_ray_hint_shadow);
         for(bc = 2; ok && bc < I->NBasis; bc++) {
           ok &= BasisMakeMap(I->Basis + bc, vert2prim_ptr, I->Primitive, I->NPrimitive,
-			     nullptr, bc - 1, cCache_ray_map, false, _0, I->PrimSize * factor);
+			     nullptr, false, _0, I->PrimSize * factor);
         }
       }
 
@@ -6120,7 +6102,7 @@ void RayRender(CRay * I, unsigned int *image, double timing,
       if(oversample_cutoff) {   /* perform edge oversampling, if requested */
         unsigned int *edging;
 
-        edging = CacheAlloc(I->G, unsigned int, buffer_size, 0, cCache_ray_edging_buffer);
+        edging = pymol::malloc<unsigned int>(buffer_size);
 
         memcpy(edging, image, buffer_size * sizeof(unsigned int));
 
@@ -6135,7 +6117,7 @@ void RayRender(CRay * I, unsigned int *image, double timing,
 #endif
           RayTraceThread(rt);
 
-        CacheFreeP(I->G, edging, 0, cCache_ray_edging_buffer, false);
+        FreeP(edging);
       }
       FreeP(rt);
     }
@@ -6525,7 +6507,7 @@ void RayRender(CRay * I, unsigned int *image, double timing,
 #endif
       RayAntiThread(rt);
     FreeP(rt);
-    CacheFreeP(I->G, image, 0, cCache_ray_antialias_buffer, false);
+    FreeP(image);
     image = image_copy;
   }
 
@@ -6655,7 +6637,7 @@ int CRay::sphere3fv(const float *v, float r)
   int ok = true;
   float *vv;
 
-  VLACacheCheck(I->G, I->Primitive, CPrimitive, I->NPrimitive, 0, cCache_ray_primitive);
+  VLACheck2<CPrimitive>(I->Primitive, I->NPrimitive);
   CHECKOK(ok, I->Primitive);
   if (!ok)
     return false;
@@ -6740,8 +6722,7 @@ int CRay::character(int char_id)
   int ok = true;
 
   v = TextGetPos(I->G);
-  VLACacheCheck(I->G, I->Primitive, CPrimitive, I->NPrimitive + 1, 0,
-                cCache_ray_primitive);
+  VLACheck2<CPrimitive>(I->Primitive, I->NPrimitive + 1);
   CHECKOK(ok, I->Primitive);
   if (!ok)
     return false;
@@ -6881,7 +6862,7 @@ int CRay::cylinder3fv(const float *v1, const float *v2, float r, const float *c1
   int ok = true;
   float *vv;
 
-  VLACacheCheck(I->G, I->Primitive, CPrimitive, I->NPrimitive, 0, cCache_ray_primitive);
+  VLACheck2<CPrimitive>(I->Primitive, I->NPrimitive);
   CHECKOK(ok, I->Primitive);
   if (!ok)
     return false;
@@ -6977,7 +6958,7 @@ int CRay::customCylinder3fv(const float *v1, const float *v2, float r,
   int ok = true;
   float *vv;
 
-  VLACacheCheck(I->G, I->Primitive, CPrimitive, I->NPrimitive, 0, cCache_ray_primitive);
+  VLACheck2<CPrimitive>(I->Primitive, I->NPrimitive);
   CHECKOK(ok, I->Primitive);
   if (!ok)
     return false;
@@ -7056,7 +7037,7 @@ int CRay::cone3fv(const float *v1, const float *v2, float r1, float r2,
     std::swap(cap1, cap2);
   }
 
-  VLACacheCheck(I->G, I->Primitive, CPrimitive, I->NPrimitive, 0, cCache_ray_primitive);
+  VLACheck2<CPrimitive>(I->Primitive, I->NPrimitive);
   CHECKOK(ok, I->Primitive);
   if (!ok)
     return false;
@@ -7131,7 +7112,7 @@ int CRay::sausage3fv(const float *v1, const float *v2, float r, const float *c1,
   int ok = true;
   float *vv;
 
-  VLACacheCheck(I->G, I->Primitive, CPrimitive, I->NPrimitive, 0, cCache_ray_primitive);
+  VLACheck2<CPrimitive>(I->Primitive, I->NPrimitive);
   CHECKOK(ok, I->Primitive);
   if (!ok)
     return false;
@@ -7196,7 +7177,7 @@ int CRay::ellipsoid3fv(const float *v, float r, const float *n1, const float *n2
   int ok = true;
   float *vv;
 
-  VLACacheCheck(I->G, I->Primitive, CPrimitive, I->NPrimitive, 0, cCache_ray_primitive);
+  VLACheck2<CPrimitive>(I->Primitive, I->NPrimitive);
   CHECKOK(ok, I->Primitive);
   if (!ok)
     return false;
@@ -7327,7 +7308,7 @@ int CRay::triangle3fv(
      dump3f(c1," c1");
      dump3f(c2," c2");
      dump3f(c3," c3"); */
-  VLACacheCheck(I->G, I->Primitive, CPrimitive, I->NPrimitive, 0, cCache_ray_primitive);
+  VLACheck2<CPrimitive>(I->Primitive, I->NPrimitive);
   CHECKOK(ok, I->Primitive);
   if (!ok)
     return false;
@@ -7515,9 +7496,9 @@ CRay *RayNew(PyMOLGlobals * G, int antialias)
   PRINTFB(I->G, FB_Ray, FB_Blather)
     " RayNew: BigEndian = %d\n", I->BigEndian ENDFB(I->G);
 
-  I->Basis = CacheAlloc(I->G, CBasis, 12, 0, cCache_ray_basis);
-  BasisInit(I->G, I->Basis, 0);
-  BasisInit(I->G, I->Basis + 1, 1);
+  I->Basis = pymol::malloc<CBasis>(12);
+  BasisInit(I->G, I->Basis);
+  BasisInit(I->G, I->Basis + 1);
   I->NBasis = 2;
   I->Primitive = nullptr;
   I->NPrimitive = 0;
@@ -7564,7 +7545,7 @@ void RayPrepare(CRay * I, float v0, float v1, float v2,
 {
   int a;
   if(!I->Primitive)
-    I->Primitive = VLACacheAlloc(I->G, CPrimitive, 10000, 3, cCache_ray_primitive);
+    I->Primitive = VLAlloc(CPrimitive, 10000);
   I->Volume[0] = v0;
   I->Volume[1] = v1;
   I->Volume[2] = v2;
@@ -7652,10 +7633,10 @@ void RayRelease(CRay * I)
   int a;
 
   for(a = 0; a < I->NBasis; a++) {
-    BasisFinish(&I->Basis[a], a);
+    BasisFinish(&I->Basis[a]);
   }
   I->NBasis = 0;
-  VLACacheFreeP(I->G, I->Primitive, 0, cCache_ray_primitive, false);
+  VLAFreeP(I->Primitive);
 }
 
 
@@ -7664,7 +7645,7 @@ void RayFree(CRay * I)
 {
   RayRelease(I);
   CharacterSetRetention(I->G, false);
-  CacheFreeP(I->G, I->Basis, 0, cCache_ray_basis, false);
+  FreeP(I->Basis);
   DeleteP(I);
 }
 

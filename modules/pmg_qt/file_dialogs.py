@@ -271,7 +271,7 @@ def load_aln_dialog(parent, filename, format):
         if format == 'fasta' and QtWidgets.QMessageBox.question(
                 parent, "Load as structures?",
                 "Load sequences as extended structures instead?"
-        ) == QtWidgets.QMessageBox.Yes:
+        ) == QtWidgets.QMessageBox.StandardButton.Yes:
             _self.load(filename)
 
     # hook up events

@@ -53,9 +53,7 @@ Z* -------------------------------------------------------------------
 #include "Executive.h"
 #include "Lex.h"
 
-#ifdef _PYMOL_IP_PROPERTIES
 #include "Property.h"
-#endif
 
 /**
  * Get atom coordinates, taking symmetry operation into account.
@@ -253,8 +251,11 @@ int CoordSetFromPyList(PyMOLGlobals * G, PyObject * list, CoordSet ** cs)
       CPythonVal_Free(val);
     }
 
-#ifdef _PYMOL_IP_PROPERTIES
-#endif
+    if (ok && (ll > 9)) {
+      CPythonVal* val = CPythonVal_PyList_GetItem(G, list, 9);
+      I->prop_id = PropertyFromPyList(G, val);
+      CPythonVal_Free(val);
+    }
 
     if(ok && (ll > 10)){
       CPythonVal *val = CPythonVal_PyList_GetItem(G, list, 10);
@@ -385,9 +386,8 @@ PyObject *CoordSetAsPyList(CoordSet * I)
     PyList_SetItem(result, 8, PConvAutoNone(nullptr) /* LabPos */);
 
     PyList_SetItem(result, 9,
-#ifdef _PYMOL_IP_PROPERTIES
-#endif
-        PConvAutoNone(Py_None));
+        I->prop_id ? PropertyAsPyList(G, I->prop_id, true) :
+                   PConvAutoNone(Py_None));
 
     if(I->SculptCGO) {
       PyList_SetItem(result, 10, CGOAsPyList(I->SculptCGO));
@@ -1132,8 +1132,19 @@ PyObject *CoordSetAtomToChemPyAtom(PyMOLGlobals * G, AtomInfoType * ai, ObjectMo
     PConvIntToPyObjAttr(atom, "index", index + 1);      /* fragile */
 
 
-#ifdef _PYMOL_IP_PROPERTIES
-#endif
+    if (ai->prop_id) {
+      PyObject* props = PropertyAsPyList(G, ai->prop_id, false);
+      if (PyList_Check(props)) {
+        PyObject* atomProperties =
+            PyObject_GetAttrString(atom, "atom_properties");
+        int lp, lsz = PyList_Size(props);
+        for (lp = 0; lp < lsz; lp++) {
+          PyObject* atProp = PyList_GetItem(props, lp);
+          PyDict_SetItem(atomProperties, PyList_GetItem(atProp, 0),
+              PyList_GetItem(atProp, 1));
+        }
+      }
+    }
 
   }
   if(PyErr_Occurred())
@@ -1259,6 +1270,25 @@ void CoordSet::invalidateRep(cRep_t type, cRepInv_t level)
     OrthoBusyFast(G, rep, cRepCnt);                                            \
   }
 
+/**
+ * @brief resolve the unit cell color, falling back to the object color when
+ * `cell_color` is unset (negative).
+ * @param csSetting pointer to coordset setting
+ * @param objSetting pointer to object setting
+ * @param objColor object Color id
+ * @return color id used to color cell
+ */
+static int ResolveCellColor(PyMOLGlobals* G, CSetting const* csSetting,
+    CSetting const* objSetting, int objColor)
+{
+  auto cell_color =
+      SettingGet_color(G, csSetting, objSetting, cSetting_cell_color);
+  if (cell_color < 0) {
+    cell_color = objColor;
+  }
+  return cell_color;
+}
+
 /*========================================================================*/
 void CoordSet::update(int state)
 {
@@ -1289,12 +1319,9 @@ void CoordSet::update(int state)
       UnitCellCGO.reset(CrystalGetUnitCellCGO(&sym->Crystal));
       auto use_shader = SettingGet<bool>(G, cSetting_use_shaders);
       if (use_shader) {
-        auto cell_color = SettingGet_color(
-            G, this->Setting.get(), Obj->Setting.get(), cSetting_cell_color);
-        if (cell_color < 0) {
-          cell_color = Obj->Color;
-        }
-        auto color = ColorGet(G, cell_color);
+        auto const cell_color = ResolveCellColor(
+            G, this->Setting.get(), Obj->Setting.get(), Obj->Color);
+        auto const* color = ColorGet(G, cell_color);
         auto preCGO = std::make_unique<CGO>(G);
         CGOColorv(preCGO.get(), color);
         CGOAppendNoStop(preCGO.get(), UnitCellCGO.get());
@@ -1326,7 +1353,7 @@ void CoordSetUpdateCoord2IdxMap(CoordSet * I, float cutoff)
     if(I->NIndex && (!I->Coord2Idx)) {  /* NOTE: map based on stored coords */
       I->Coord2IdxReq = cutoff;
       I->Coord2IdxDiv = cutoff * 1.25F;
-      I->Coord2Idx = MapNew(I->G, I->Coord2IdxDiv, I->Coord, I->NIndex, nullptr);
+      I->Coord2Idx = new MapType(I->G, I->Coord2IdxDiv, I->Coord, I->NIndex, nullptr);
       if(I->Coord2IdxDiv < I->Coord2Idx->Div)
         I->Coord2IdxDiv = I->Coord2Idx->Div;
     }
@@ -1383,17 +1410,19 @@ void CoordSet::render(RenderInfo * info)
 
   // cell
   if (UnitCellCGO && (Obj->visRep & cRepCellBit)) {
+    auto const cell_color = ResolveCellColor(
+        G, this->Setting.get(), Obj->Setting.get(), Obj->Color);
+    auto const* color = ColorGet(G, cell_color);
     if (ray) {
-      CGORenderRay(UnitCellCGO.get(), ray, info, ColorGet(G, Obj->Color),
+      CGORenderRay(UnitCellCGO.get(), ray, info, color,
           nullptr, Setting.get(), Obj->Setting.get());
     } else if (!pick && pass == RenderPass::Opaque && G->HaveGUI &&
                G->ValidContext) {
-      ObjectUseColor(Obj);
       auto renderCGO = UnitCellCGO.get();
       if (use_shader && UnitCellShaderCGO) {
         renderCGO = UnitCellShaderCGO.get();
       }
-      CGORender(renderCGO, ColorGet(G, Obj->Color), Setting.get(),
+      CGORender(renderCGO, color, Setting.get(),
           Obj->Setting.get(), info, nullptr);
     }
   }
@@ -1529,8 +1558,10 @@ CoordSet::CoordSet(const CoordSet& cs)
 
   UtilZeroMem(this->Rep, sizeof(::Rep *) * cRepCnt);
 
-#ifdef _PYMOL_IP_PROPERTIES
-#endif
+  if (cs.prop_id) {
+    PropertyCheckUniqueID(G, this);
+    PropertyCopyProperties(G, cs.prop_id, this->prop_id);
+  }
 
 }
 
@@ -1626,8 +1657,10 @@ void CoordSet::enumIndices()
 /*========================================================================*/
 CoordSet::~CoordSet()
 {
-#ifdef _PYMOL_IP_PROPERTIES
-#endif
+  if (prop_id) {
+    PropertyUniqueDetachChain(G, prop_id);
+    prop_id = 0;
+  }
 
   if (has_any_atom_state_settings()) {
     for (int a = 0; a < NIndex; ++a) {

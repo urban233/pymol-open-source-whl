@@ -1698,10 +1698,8 @@ static PyObject* CmdGetCapabilities(PyObject*, PyObject*)
     // numpy support (cmd.get_coords, cmd.get_volume_field)
     PySet_Add(caps, PConvToPyObject("numpy"));
 #endif
-#ifdef _PYMOL_IP_PROPERTIES
-    // object and atom level properties, incentive feature since PyMOL 1.6
+    // object and atom level properties
     PySet_Add(caps, PConvToPyObject("properties"));
-#endif
 #ifndef NO_MMLIBS
     // mmlibs atom typing and stereochemistry, incentive feature PyMOL 1.4-1.8
     PySet_Add(caps, PConvToPyObject("mmlibs"));
@@ -1951,6 +1949,61 @@ static PyObject *CmdAlign(PyObject * self, PyObject * args)
   } else {
     return APIFailure();
   }
+}
+
+static PyObject *CmdUSalign(PyObject * self, PyObject * args)
+{
+  PyMOLGlobals *G = nullptr;
+  const char *mobile, *target, *oname;
+  int mobile_state, target_state, quiet, transform, fast;
+  API_SETUP_ARGS(G, self, args, "Ossiiiisi", &self,
+      &mobile, &target, &mobile_state, &target_state,
+      &quiet, &transform, &oname, &fast);
+  API_ASSERT(APIEnterNotModal(G));
+
+  OrthoLineType s1, s2;
+  int ok = (SelectorGetTmp(G, mobile, s1) >= 0) &&
+           (SelectorGetTmp(G, target, s2) >= 0);
+
+  // Store results in locals — can't call Py_BuildValue until after APIExit
+  double tm_target = 0, tm_mobile = 0, rmsd = 0, seq_id = 0;
+  int ali_len = 0;
+  bool have_result = false;
+  std::string err_msg;
+
+  if (ok) {
+    auto res = ExecutiveUSalign(G, s1, s2,
+        mobile_state, target_state, quiet, transform, oname, fast);
+    if (res) {
+      auto& r = res.result();
+      tm_target = r.tm_score_target;
+      tm_mobile = r.tm_score_mobile;
+      rmsd = r.rmsd;
+      ali_len = r.aligned_length;
+      seq_id = r.seq_identity;
+      have_result = true;
+    } else {
+      err_msg = res.error().what();
+    }
+  }
+
+  SelectorFreeTmp(G, s1);
+  SelectorFreeTmp(G, s2);
+  APIExit(G);
+
+  if (have_result) {
+    return Py_BuildValue("{s:d,s:d,s:d,s:i,s:d}",
+        "tm_score_target", tm_target,
+        "tm_score_mobile", tm_mobile,
+        "RMSD", rmsd,
+        "alignment_length", ali_len,
+        "seq_identity", seq_id);
+  }
+  if (!err_msg.empty()) {
+    PyErr_SetString(PyExc_RuntimeError, err_msg.c_str());
+    return nullptr;
+  }
+  return APIFailure();
 }
 
 static PyObject *CmdGetCoordsAsNumPy(PyObject * self, PyObject * args)
@@ -4063,39 +4116,35 @@ static PyObject *CmdDirty(PyObject * self, PyObject * args)
   return APISuccess();
 }
 
+static pymol::Result<PyObject*> _getObjectMoleculeNamePyList(
+    PyMOLGlobals* G, char const* sele)
+{
+  if (!sele[0]) {
+    return PyList_New(0);
+  }
+  auto tmpsele1 = SelectorTmp::make(G, sele);
+  p_return_if_error(tmpsele1);
+  auto const list = ExecutiveGetObjectMoleculeVLA(G, tmpsele1->getName());
+  assert(list);
+  auto const size = list.size();
+  auto result = PyList_New(size);
+  if (result) {
+    for (unsigned a = 0; a < size; ++a) {
+      PyList_SetItem(result, a, PyUnicode_FromString(list[a]->Name));
+    }
+  }
+  return result;
+}
+
 static PyObject *CmdGetObjectList(PyObject * self, PyObject * args)
 {
   PyMOLGlobals *G = nullptr;
   char *str1;
-  OrthoLineType s1;
-  int ok = false;
-  PyObject *result = nullptr;
-
-  ok = PyArg_ParseTuple(args, "Os", &self, &str1);
-
-  if(ok) {
-    API_SETUP_PYMOL_GLOBALS;
-    ok = (G != nullptr);
-  } else {
-    API_HANDLE_ERROR;
-  }
-  if(ok && (ok = APIEnterBlockedNotModal(G))) {
-    ok = (SelectorGetTmp(G, str1, s1) >= 0);
-    auto list = ExecutiveGetObjectMoleculeVLA(G, s1);
-    if(list) {
-      unsigned int size = VLAGetSize(list);
-      result = PyList_New(size);
-      if(result) {
-        unsigned int a;
-        for(a = 0; a < size; a++) {
-          PyList_SetItem(result, a, PyString_FromString(list[a]->Name));
-        }
-      }
-    }
-    SelectorFreeTmp(G, s1);
-    APIExitBlocked(G);
-  }
-  return (APIAutoNone(result));
+  API_SETUP_ARGS(G, self, args, "Os", &self, &str1);
+  API_ASSERT(APIEnterBlockedNotModal(G));
+  auto res = _getObjectMoleculeNamePyList(G, str1);
+  APIExitBlocked(G);
+  return APIResult(G, res);
 }
 
 static PyObject *CmdGetDistance(PyObject * self, PyObject * args)
@@ -5506,7 +5555,8 @@ static PyObject *CmdLoad(PyObject * self, PyObject * args)
   auto result = ExecutiveLoad(G,
                          fname, contents, bytes, type,
                          oname, frame, zoom,
-                         discrete, finish, multiplex, quiet, plugin);
+                         discrete, finish, multiplex, quiet, plugin,
+                         object_props, atom_props, mimic);
 
   OrthoRestorePrompt(G);
   APIExit(G);
@@ -6105,6 +6155,79 @@ static PyObject *CmdAssignAtomTypes(PyObject *self, PyObject *args)
   return APIResultOk(G, ok);
 }
 
+static PyObject *CmdSetProperty(PyObject * self, PyObject * args)
+{
+  PyMOLGlobals *G = nullptr;
+  PyObject *value;
+  char *sname, *propname;
+  int proptype;
+  int state;
+  int quiet;
+  API_SETUP_ARGS(G, self, args, "OsOsiii", &self, &propname, &value, &sname, &proptype, &state, &quiet);
+  APIEnterBlocked(G);
+  pymol::Result<bool> result;
+  {
+    auto r = ExecutiveSetPropertyForObject(G, propname, value, sname, state, proptype, quiet);
+    if (r)
+      result = true;
+    else
+      result = pymol::make_error(r.error().what());
+  }
+  APIExitBlocked(G);
+  return APIResult(G, result);
+}
+
+static PyObject *CmdSetAtomProperty(PyObject * self, PyObject * args)
+{
+  PyMOLGlobals *G = nullptr;
+  PyObject *value;
+  char *sele;
+  OrthoLineType s1;
+  char *propname;
+  int proptype;
+  int state;
+  int quiet;
+  int ok = false;
+  API_SETUP_ARGS(G, self, args, "OsOsiii", &self, &propname, &value, &sele, &proptype, &state, &quiet);
+
+  pymol::Result<> result;
+  {
+    APIEnterBlocked(G);
+    ok = (SelectorGetTmp(G, sele, s1) >= 0);
+    if (ok){
+      ok = ExecutiveSetAtomPropertyForSelection(G, propname, value, s1, state, proptype, quiet);
+      SelectorFreeTmp(G, s1);
+    }
+    if (!ok) {
+      result = pymol::Error::QUIET;
+    }
+    APIExitBlocked(G);
+  }
+  return APIResult(G, result);
+}
+
+static PyObject *CmdGetProperty(PyObject * self, PyObject * args)
+{
+  PyMOLGlobals *G = nullptr;
+  char *sname, *propname;
+  int state, quiet;
+  PyObject *result = Py_None;
+  int ok = false;
+  ok = PyArg_ParseTuple(args, "Ozsii", &self, &propname, &sname, &state, &quiet);
+  if(ok) {
+    API_SETUP_PYMOL_GLOBALS;
+    ok = (G != nullptr);
+  } else {
+    API_HANDLE_ERROR;
+  }
+  if(ok){
+    APIEnterBlocked(G);
+    result = ExecutiveGetPropertyForObject(G, propname, sname, state, quiet);
+    APIExitBlocked(G);
+  }
+  return APIAutoNone(result);
+}
+
 static PyObject *CmdSetDiscrete(PyObject * self, PyObject * args)
 {
   const char *name;
@@ -6345,6 +6468,7 @@ static PyMethodDef Cmd_methods[] = {
   {"get_min_max", CmdGetMinMax, METH_VARARGS},
   {"get_mtl_obj", CmdGetMtlObj, METH_VARARGS},
   {"get_model", CmdGetModel, METH_VARARGS},
+  {"get_property", CmdGetProperty, METH_VARARGS},
   {"get_bonds", CmdGetBonds, METH_VARARGS},
   {"get_modal_draw", CmdGetModalDraw, METH_VARARGS},
   {"get_moment", CmdGetMoment, METH_VARARGS},
@@ -6499,6 +6623,8 @@ static PyMethodDef Cmd_methods[] = {
   {"set_colorection", CmdSetColorection, METH_VARARGS},
   {"set_dihe", CmdSetDihe, METH_VARARGS},
   {"set_discrete", CmdSetDiscrete, METH_VARARGS},
+  {"set_property", CmdSetProperty, METH_VARARGS},
+  {"set_atom_property", CmdSetAtomProperty, METH_VARARGS},
   {"set_feedback", CmdSetFeedbackMask, METH_VARARGS},
   {"set_frame", CmdSetFrame, METH_VARARGS},
   {"set_name", CmdSetName, METH_VARARGS},
@@ -6542,6 +6668,7 @@ static PyMethodDef Cmd_methods[] = {
   {"unset", CmdUnset, METH_VARARGS},
   {"unset_bond", CmdUnsetBond, METH_VARARGS},
   {"update", CmdUpdate, METH_VARARGS},
+  {"usalign", CmdUSalign, METH_VARARGS},
   {"window", CmdWindow, METH_VARARGS},
   {"zoom", CmdZoom, METH_VARARGS},
   {NULL, nullptr}                  /* sentinel */

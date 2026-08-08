@@ -56,6 +56,8 @@ Z* -------------------------------------------------------------------
 #define cPRunType_alter_state    2
 #define cPRunType_label          3
 
+unsigned getExplicitValence(ObjectMolecule const* obj, size_t atm);
+unsigned getExplicitDegree(ObjectMolecule const* obj, size_t atm);
 
 int PLabelExprUsesVariable(PyMOLGlobals * G, const char *expr, const char *var);
 
@@ -230,9 +232,7 @@ struct WrapperObject : PyObject {
   PyMOLGlobals * G;
   PyObject *dict;
   SettingPropertyWrapperObject* settingWrapperObject;
-#ifdef _PYMOL_IP_PROPERTIES
   SettingPropertyWrapperObject* propertyWrapperObject;
-#endif
 };
 
 struct SettingPropertyWrapperObject : PyObject {

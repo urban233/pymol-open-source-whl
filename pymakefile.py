@@ -22,12 +22,12 @@ parses positional and keyword arguments and routes execution accordingly.
 
 Typical usage::
 
-    chmod +x pymake.bat/sh
+    chmod +x pymake.sh
 
     ./pymake.bat/sh                   # Print the help menu
     ./pymake.bat/sh test              # Run with defaults
     ./pymake.bat/sh test verbose=true # Pass keyword argument
-    ./pymake.bat/sh build env=prod    # Override default keyword argument
+    ./pymake.bat/sh build_wheel       # Build a wheel with the project backend
 
 Design principles:
     - **Portability**: Only the Python standard library is used (Python ≥ 3.8).
@@ -42,6 +42,9 @@ Design principles:
 """
 
 import inspect
+import os
+import pathlib
+import platform as host_platform
 import shlex
 import subprocess
 
@@ -131,6 +134,7 @@ def run(
         check: bool = True,
         capture: bool = False,
         env: Optional[Dict[str, str]] = None,
+        cwd: Optional[pathlib.Path] = None,
 ) -> Optional[str]:
   """Executes a shell command, printing it to stdout before running.
 
@@ -154,6 +158,7 @@ def run(
           output of a command is needed programmatically.
       env: Optional mapping of environment variables to pass to the child
           process.  When ``None``, the parent environment is inherited.
+      cwd: Optional working directory for the child process.
 
   Returns:
       The captured stdout string (stripped of leading/trailing whitespace)
@@ -183,6 +188,7 @@ def run(
     capture_output=capture,
     text=True,
     env=env,
+    cwd=cwd,
   )
   if capture:
     return result.stdout.strip()
@@ -371,6 +377,113 @@ def _main() -> None:
 # </editor-fold>
 
 # <editor-fold desc="Tasks">
+_PROJECT_ROOT = pathlib.Path(__file__).resolve().parent
+
+
+def _vcpkg_executable(vcpkg_dir: pathlib.Path) -> pathlib.Path:
+  """Returns the platform-specific vcpkg executable path."""
+  if os.name == "nt":
+    return vcpkg_dir / "vcpkg.exe"
+  return vcpkg_dir / "vcpkg"
+
+
+def _vcpkg_triplet() -> str:
+  """Returns the vcpkg triplet required by the current build platform."""
+  if os.name == "nt":
+    return (
+      "x86-windows-static"
+      if os.environ.get("WIN_ARCH") == "x86"
+      else "x64-windows-static"
+    )
+  if sys.platform == "darwin":
+    return "arm64-osx" if os.environ.get("ARCH") == "arm64" else "x64-osx"
+  if sys.platform == "linux":
+    return "x64-linux"
+  raise RuntimeError(f"Unsupported platform: {sys.platform}")
+
+
+def _native_build_environment() -> Dict[str, str]:
+  """Returns the environment needed by the platform-specific CMake build."""
+  environment = os.environ.copy()
+  if os.name == "nt":
+    environment.setdefault("WIN_ARCH", "x64")
+  elif sys.platform == "darwin":
+    environment.setdefault(
+      "ARCH",
+      "arm64"
+      if host_platform.machine().lower() in {"arm64", "aarch64"}
+      else "x86_64",
+    )
+  return environment
+
+
+@task
+def generate() -> None:
+  """Generate the C/C++ sources required by the native extension build."""
+  run(
+    f'"{sys.executable}" "{_PROJECT_ROOT / "scripts" / "python" / "create_generated_files.py"}"'
+  )
+
+
+@task
+def setup_dev_env() -> None:
+  """Generate build sources and install the native vcpkg dependencies."""
+  generate()
+
+  vcpkg_dir = _PROJECT_ROOT / "vendor" / "vcpkg"
+  if not vcpkg_dir.exists():
+    run(
+      f'git clone https://github.com/microsoft/vcpkg.git "{vcpkg_dir}"',
+      cwd=_PROJECT_ROOT,
+    )
+
+  if os.name == "nt":
+    bootstrap = vcpkg_dir / "bootstrap-vcpkg.bat"
+    bootstrap_command = f'"{bootstrap}" -disableMetrics'
+  else:
+    bootstrap = vcpkg_dir / "bootstrap-vcpkg.sh"
+    bootstrap_command = f'sh "{bootstrap}" -disableMetrics'
+  if not _vcpkg_executable(vcpkg_dir).exists():
+    run(bootstrap_command, cwd=vcpkg_dir)
+
+  triplet = _vcpkg_triplet()
+  run(
+    f'"{_vcpkg_executable(vcpkg_dir)}" install --triplet={triplet}',
+    cwd=_PROJECT_ROOT,
+  )
+
+
+@task
+def build_wheel() -> None:
+  """Build a source distribution and wheel with the PEP 517 backend."""
+  run(f'"{sys.executable}" -m build', cwd=_PROJECT_ROOT)
+
+
+@task
+def build_wheels(platform: str = "auto", archs: str = "auto") -> None:
+  """Build platform wheels and run each wheel's configured test suite.
+
+  Uses cibuildwheel, which installs every built wheel into an isolated test
+  environment and runs ``tool.cibuildwheel.test-command`` from ``pyproject.toml``.
+
+  Args:
+      platform: cibuildwheel platform selector, such as ``windows`` or
+          ``macos``. Defaults to ``auto``.
+      archs: cibuildwheel architecture selector, such as ``x86`` or ``AMD64``.
+          Defaults to ``auto``.
+  """
+  allowed_platforms = {"auto", "linux", "macos", "windows"}
+  if platform not in allowed_platforms:
+    raise ValueError(f"Unsupported cibuildwheel platform: {platform}")
+  command = "cibuildwheel ."
+  if platform != "auto":
+    command += f" --platform {platform}"
+  if archs != "auto":
+    command += f" --archs {archs}"
+
+  run(command, cwd=_PROJECT_ROOT, env=_native_build_environment())
+
+
 @task
 def format(check: str = "false") -> None:  # noqa: A001  (shadows builtin intentionally)
   """Format the codebase with Ruff.
@@ -419,10 +532,11 @@ def check_types() -> None:
 
 @task
 def test(match: str = "", verbose: str = "false") -> None:
-  """Execute the test suite with pytest.
+  """Build the project if needed, then execute the test suite with pytest.
 
-  Runs all tests discovered by ``pytest`` from the current directory.
-  Optional filters allow targeted execution during development.
+  A fresh checkout has no installed ``pymol`` package or native ``_cmd``
+  extension. In that case this task generates sources, installs vcpkg
+  dependencies, and installs the project editable before running pytest.
 
   Args:
       match: A ``-k`` expression passed directly to pytest to select tests
@@ -438,14 +552,28 @@ def test(match: str = "", verbose: str = "false") -> None:
       ./pymake.bat/sh test verbose=true          # Verbose output.
       ./pymake.bat/sh test match=api verbose=true
   """
-  cmd_parts: List[str] = ["pytest"]
+  test_environment = _native_build_environment()
+  try:
+    import pymol  # pylint: disable=import-outside-toplevel,unused-import
+    from pymol import _cmd  # pylint: disable=import-outside-toplevel,unused-import
+  except ImportError:
+    setup_dev_env()
+    run(
+      f'uv pip install --python "{sys.executable}" --no-deps --editable "{_PROJECT_ROOT}"',
+      cwd=_PROJECT_ROOT,
+      env=test_environment,
+    )
+
+  # Keep vendored vcpkg tests and the separate upstream testing tree out of the
+  # wheel smoke-test task. Those suites have different fixtures and runners.
+  cmd_parts: List[str] = ["pytest", "tests"]
   if verbose.lower() == "true":
     cmd_parts.append("-v")
   if match:
     # Use shlex.quote to prevent accidental shell injection from the match
     # expression while still allowing pytest expressions like 'api or db'.
     cmd_parts.extend(["-k", shlex.quote(match)])
-  run(" ".join(cmd_parts))
+  run(" ".join(cmd_parts), cwd=_PROJECT_ROOT, env=test_environment)
 
 # </editor-fold>
 

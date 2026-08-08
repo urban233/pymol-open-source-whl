@@ -17,7 +17,7 @@ name: Build Wheels
 on:
   push:
     branches:
-      - scikit_build_core
+      - update-to-3.0.2.X
 
 env:
   VCPKG_ROOT: ${{ github.workspace }}/vendor/vcpkg
@@ -25,6 +25,10 @@ env:
 jobs:
   # ----- Windows build section
   build-windows:
+    env:
+      WIN_ARCH: ${{ matrix.win_arch }}
+      CMAKE_GENERATOR: Visual Studio 17 2022
+      CMAKE_GENERATOR_TOOLSET: v143
     strategy:
       fail-fast: false
       matrix:
@@ -36,6 +40,9 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Initialize vcpkg
         run: |
           git clone https://github.com/Microsoft/vcpkg.git vendor/vcpkg
@@ -45,40 +52,36 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Create virtual environment
-        run: |
-          python -m venv .venv
-          call .venv\Scripts\activate.bat
-          python -m pip install --upgrade setuptools pip wheel build cibuildwheel 
-          python -m pip install delvewheel
-          python -m pip install -r requirements.txt
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+        with:
+          vs-version: '[17.0,18.0)'
+
+      - name: Sync Python environment
+        run: uv sync --locked --no-install-project
         shell: cmd
 
       - name: Bootstrap vcpkg
         run: ${{ env.VCPKG_ROOT }}/bootstrap-vcpkg.bat -disableMetrics
 
       - name: Last build environment setup steps
-        run: |
-          call .venv\Scripts\activate.bat
-          python automations\my_automator.py setup dev-env
+        run: uv run --locked --no-sync python pymakefile.py setup_dev_env
         shell: cmd
 
       - name: Build x86 C extension
         if: ${{ matrix.win_arch == 'x86' }}
         run: |
           ${{ env.VCPKG_ROOT }}/vcpkg install --triplet=x86-windows-static
-          call .venv\Scripts\activate.bat
           set WIN_ARCH=x86
-          cibuildwheel . --platform windows --archs x86
+          uv run --locked --no-sync python pymakefile.py build_wheels platform=windows archs=x86
         shell: cmd
 
       - name: Build x64 C extension
         if: ${{ matrix.win_arch == 'x64' }}
         run: |
           ${{ env.VCPKG_ROOT }}/vcpkg install --triplet=x64-windows-static
-          call .venv\Scripts\activate.bat
           set WIN_ARCH=x64
-          cibuildwheel . --platform windows --archs AMD64
+          uv run --locked --no-sync python pymakefile.py build_wheels platform=windows archs=AMD64
         shell: cmd
 
       - name: Upload artifact
@@ -101,6 +104,9 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Initialize vcpkg
         run: |
           git clone https://github.com/Microsoft/vcpkg.git vendor/vcpkg
@@ -110,12 +116,8 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Create virtual environment
-        run: |
-          python -m venv .venv
-          source .venv/bin/activate
-          python -m pip install wheel setuptools cibuildwheel 
-          python -m pip install -r requirements.txt
+      - name: Sync Python environment
+        run: uv sync --locked --no-install-project
 
       - name: Bootstrap vcpkg
         run: ${{ env.VCPKG_ROOT }}/bootstrap-vcpkg.sh -disableMetrics
@@ -125,17 +127,13 @@ jobs:
           ${{ env.VCPKG_ROOT }}/vcpkg install
 
       - name: Last build environment setup steps
-        run: |
-          source .venv/bin/activate
-          python automations/my_automator.py setup dev-env
+        run: ARCH=$(uname -m) uv run --locked --no-sync python pymakefile.py setup_dev_env
 
       - name: Build C extension
         run: |
-          source .venv/bin/activate
-          python automations/my_automator.py setup dev-env
           export ARCH=$(uname -m)
           export MACOSX_DEPLOYMENT_TARGET=12.0
-          cibuildwheel .
+          uv run --locked --no-sync python pymakefile.py build_wheels
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -153,6 +151,9 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -167,12 +168,8 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Create virtual environment
-        run: |
-          python -m venv .venv
-          source .venv/bin/activate
-          python -m pip install wheel setuptools cibuildwheel 
-          python -m pip install -r requirements.txt
+      - name: Sync Python environment
+        run: uv sync --locked --no-install-project
 
       - name: Bootstrap vcpkg
         run: ${{ env.VCPKG_ROOT }}/bootstrap-vcpkg.sh -disableMetrics
@@ -182,15 +179,10 @@ jobs:
           ${{ env.VCPKG_ROOT }}/vcpkg install
 
       - name: Last build environment setup steps
-        run: |
-          source .venv/bin/activate
-          python automations/my_automator.py setup dev-env
+        run: uv run --locked --no-sync python pymakefile.py setup_dev_env
 
       - name: Build C extension
-        run: |
-          source .venv/bin/activate
-          python automations/my_automator.py setup dev-env
-          cibuildwheel .
+        run: uv run --locked --no-sync python pymakefile.py build_wheels
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

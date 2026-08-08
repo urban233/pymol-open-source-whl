@@ -60,23 +60,46 @@ pip install pymol-open-source-whl
 ## Build wheel file
 To build the wheel file (based on the provided pre-built `_cmd` module), follow these steps (the working directory is the repository root directory):
 
-1. Set up a Python virtual environment under the project root directory.
+1. Install [uv](https://docs.astral.sh/uv/) and use it to create the locked
+   project environment.
 
-2. Install all requirements using the requirements.txt:
+2. Sync the development dependencies:
     ```shell
-    pip install -r requirements.txt
+    uv sync --locked
     ```
 
 3. Set up the build environment by running:
-   ```shell
-   ./win_automator.bat setup dev-env
-   ```
+    ```shell
+    ./pymake.bat setup_dev_env  # Windows
+    ./pymake.sh setup_dev_env   # macOS/Linux
+    ```
 
 4. Build the wheel file using the pre-built `_cmd` module
     ```shell
-    python -m build
-    ```
+    ./pymake.bat build_wheel     # Windows
+    ./pymake.sh build_wheel      # macOS/Linux
+   ```
    After a successful build the wheel file can be found under the `dist/` folder.
+
+For a platform-specific native wheel build, use cibuildwheel through PyMake:
+
+```shell
+./pymake.bat build_wheels platform=windows archs=AMD64  # Windows
+./pymake.sh build_wheels                            # macOS/Linux
+```
+
+Each cibuildwheel build installs the resulting wheel in an isolated environment
+and runs the configured PyMOL test suite before producing the artifact.
+
+To run the packaged test suite locally, use:
+
+```shell
+./pymake.bat test  # Windows
+./pymake.sh test   # macOS/Linux
+```
+
+On a fresh checkout this generates sources, prepares vcpkg, installs the native
+extension editable, and then runs the tests under `tests/`.
 
 ## From source
 The following information is about building only the `_cmd` module from source.

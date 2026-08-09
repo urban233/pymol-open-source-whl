@@ -11,3 +11,4 @@ generated
 /vcpkg_installed/
 /vendor/
 /dist/
+/wheelhouse/

@@ -15,20 +15,29 @@
 name: Build Wheels
 
 on:
+  pull_request:
+    branches: [production]
+  workflow_dispatch:
   push:
-    branches:
-      - scikit_build_core
+    tags: ["v*"]
+
+permissions:
+  contents: read
 
 env:
   VCPKG_ROOT: ${{ github.workspace }}/vendor/vcpkg
+  VCPKG_COMMIT: 9942fb5f996ea431c5ed8fb8d2a53f31d08df62e
 
 jobs:
   # ----- Windows build section
   build-windows:
+    name: Windows (${{ matrix.win_arch }})
+    env:
+      WIN_ARCH: ${{ matrix.win_arch }}
     strategy:
       fail-fast: false
       matrix:
-        win_arch: ['x86', 'x64']
+        win_arch: ['x64']
     runs-on: windows-latest
     steps:
       - name: Checkout repository
@@ -36,64 +45,68 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Initialize vcpkg
         run: |
           git clone https://github.com/Microsoft/vcpkg.git vendor/vcpkg
+          git -C vendor/vcpkg checkout ${{ env.VCPKG_COMMIT }}
+
+      - name: Cache vcpkg downloads
+        uses: actions/cache@v4
+        with:
+          path: vendor/vcpkg/downloads
+          key: vcpkg-downloads-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-downloads-${{ env.VCPKG_COMMIT }}-
+
+      - name: Cache vcpkg installed packages
+        uses: actions/cache@v4
+        with:
+          path: vcpkg_installed
+          key: vcpkg-installed-${{ runner.os }}-${{ matrix.win_arch }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-installed-${{ runner.os }}-${{ matrix.win_arch }}-${{ env.VCPKG_COMMIT }}-
 
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Create virtual environment
-        run: |
-          python -m venv .venv
-          call .venv\Scripts\activate.bat
-          python -m pip install --upgrade setuptools pip wheel build cibuildwheel 
-          python -m pip install delvewheel
-          python -m pip install -r requirements.txt
+      - name: Sync Python environment
+        run: uv sync --locked --no-install-project
         shell: cmd
 
       - name: Bootstrap vcpkg
         run: ${{ env.VCPKG_ROOT }}/bootstrap-vcpkg.bat -disableMetrics
 
       - name: Last build environment setup steps
-        run: |
-          call .venv\Scripts\activate.bat
-          python automations\my_automator.py setup dev-env
+        run: uv run --locked --no-sync python pymakefile.py setup_dev_env
         shell: cmd
 
-      - name: Build x86 C extension
-        if: ${{ matrix.win_arch == 'x86' }}
-        run: |
-          ${{ env.VCPKG_ROOT }}/vcpkg install --triplet=x86-windows-static
-          call .venv\Scripts\activate.bat
-          set WIN_ARCH=x86
-          cibuildwheel . --platform windows --archs x86
-        shell: cmd
-
-      - name: Build x64 C extension
+      - name: Build and test x64 wheels
         if: ${{ matrix.win_arch == 'x64' }}
         run: |
           ${{ env.VCPKG_ROOT }}/vcpkg install --triplet=x64-windows-static
-          call .venv\Scripts\activate.bat
           set WIN_ARCH=x64
-          cibuildwheel . --platform windows --archs AMD64
+          uv run --locked --no-sync python pymakefile.py build_wheels platform=windows archs=AMD64
         shell: cmd
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PyMOL-wheel-Windows-${{ matrix.win_arch }}-3.11
+          name: PyMOL-wheel-Windows-${{ matrix.win_arch }}
           path: ./wheelhouse/*.whl
   # --- end
 
   # ----- macOS build section
   build-macos:
+    name: macOS (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ macos-13, macos-14 ]
+        os: [ macos-15-intel, macos-15 ]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
@@ -101,21 +114,37 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Initialize vcpkg
         run: |
           git clone https://github.com/Microsoft/vcpkg.git vendor/vcpkg
+          git -C vendor/vcpkg checkout ${{ env.VCPKG_COMMIT }}
+
+      - name: Cache vcpkg downloads
+        uses: actions/cache@v4
+        with:
+          path: vendor/vcpkg/downloads
+          key: vcpkg-downloads-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-downloads-${{ env.VCPKG_COMMIT }}-
+
+      - name: Cache vcpkg installed packages
+        uses: actions/cache@v4
+        with:
+          path: vcpkg_installed
+          key: vcpkg-installed-${{ matrix.os }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-installed-${{ matrix.os }}-${{ env.VCPKG_COMMIT }}-
 
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Create virtual environment
-        run: |
-          python -m venv .venv
-          source .venv/bin/activate
-          python -m pip install wheel setuptools cibuildwheel 
-          python -m pip install -r requirements.txt
+      - name: Sync Python environment
+        run: uv sync --locked --no-install-project
 
       - name: Bootstrap vcpkg
         run: ${{ env.VCPKG_ROOT }}/bootstrap-vcpkg.sh -disableMetrics
@@ -125,33 +154,33 @@ jobs:
           ${{ env.VCPKG_ROOT }}/vcpkg install
 
       - name: Last build environment setup steps
-        run: |
-          source .venv/bin/activate
-          python automations/my_automator.py setup dev-env
+        run: ARCH=$(uname -m) uv run --locked --no-sync python pymakefile.py setup_dev_env
 
-      - name: Build C extension
+      - name: Build and test wheels
         run: |
-          source .venv/bin/activate
-          python automations/my_automator.py setup dev-env
           export ARCH=$(uname -m)
           export MACOSX_DEPLOYMENT_TARGET=12.0
-          cibuildwheel .
+          uv run --locked --no-sync python pymakefile.py build_wheels
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PyMOL-wheel-${{ matrix.os }}-3.11
+          name: PyMOL-wheel-${{ matrix.os }}
           path: ./wheelhouse/*.whl
   # --- end
 
   # ----- GNU Linux build section
   build-gnu-linux:
+    name: GNU/Linux (x64)
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
 
       - name: Install system dependencies
         run: |
@@ -161,18 +190,31 @@ jobs:
       - name: Initialize vcpkg
         run: |
           git clone https://github.com/Microsoft/vcpkg.git vendor/vcpkg
+          git -C vendor/vcpkg checkout ${{ env.VCPKG_COMMIT }}
+
+      - name: Cache vcpkg downloads
+        uses: actions/cache@v4
+        with:
+          path: vendor/vcpkg/downloads
+          key: vcpkg-downloads-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-downloads-${{ env.VCPKG_COMMIT }}-
+
+      - name: Cache vcpkg installed packages
+        uses: actions/cache@v4
+        with:
+          path: vcpkg_installed
+          key: vcpkg-installed-${{ runner.os }}-x64-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-installed-${{ runner.os }}-x64-${{ env.VCPKG_COMMIT }}-
 
       - name: Setup Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Create virtual environment
-        run: |
-          python -m venv .venv
-          source .venv/bin/activate
-          python -m pip install wheel setuptools cibuildwheel 
-          python -m pip install -r requirements.txt
+      - name: Sync Python environment
+        run: uv sync --locked --no-install-project
 
       - name: Bootstrap vcpkg
         run: ${{ env.VCPKG_ROOT }}/bootstrap-vcpkg.sh -disableMetrics
@@ -182,19 +224,97 @@ jobs:
           ${{ env.VCPKG_ROOT }}/vcpkg install
 
       - name: Last build environment setup steps
-        run: |
-          source .venv/bin/activate
-          python automations/my_automator.py setup dev-env
+        run: uv run --locked --no-sync python pymakefile.py setup_dev_env
 
-      - name: Build C extension
-        run: |
-          source .venv/bin/activate
-          python automations/my_automator.py setup dev-env
-          cibuildwheel .
+      - name: Build and test wheels
+        run: uv run --locked --no-sync python pymakefile.py build_wheels
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PyMOL-wheel-GNU-Linux-3.11
+          name: PyMOL-wheel-GNU-Linux
           path: ./wheelhouse/*.whl
   # --- end
+
+  release-integrity:
+    name: Validate release distributions
+    needs: [build-windows, build-macos, build-gnu-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Download wheel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: PyMOL-wheel-*
+          path: dist
+          merge-multiple: true
+
+      - name: Install distribution validation tools
+        run: python -m pip install --disable-pip-version-check twine
+
+      - name: Validate distribution metadata
+        run: python -m twine check dist/*.whl
+
+      - name: Verify release metadata and wheel coverage
+        run: python scripts/verify_release.py --dist dist
+
+      - name: Verify release tag version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: python scripts/verify_release.py --dist dist --tag "$GITHUB_REF_NAME"
+
+      - name: Upload validated distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: pypi-distributions
+          path: dist/*.whl
+          if-no-files-found: error
+
+  attest:
+    name: Attest release distributions
+    needs: release-integrity
+    if: >
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    permissions:
+      attestations: write
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download validated distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: pypi-distributions
+          path: dist
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/*.whl
+
+  publish:
+    name: Publish distributions to PyPI
+    needs: attest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      id-token: write
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/pymol-open-source-whl
+    steps:
+      - name: Download validated distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: pypi-distributions
+          path: dist
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

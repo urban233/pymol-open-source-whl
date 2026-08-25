@@ -15,8 +15,12 @@
 """
 import pathlib
 
+import pytest
+
 import pymol
 from pymol import cmd
+
+pytestmark = [pytest.mark.large, pytest.mark.network]
 
 _FILEPATH = pathlib.Path(__file__).parent
 

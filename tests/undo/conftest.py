@@ -1,22 +1,37 @@
 import pytest
 
-from pymol import cmd
-import pymol
-
-
-has_multi_undo = "multi_undo" in pymol.get_capabilities()
-
 
 @pytest.fixture(autouse=True)
 def setup():
-    if not has_multi_undo:
+    from pymol import cmd, get_capabilities
+
+    if "multi_undo" not in get_capabilities():
         pytest.skip("multi-state undo is unavailable")
     cmd.reinitialize()
-    yield
+    try:
+        yield
+    finally:
+        cmd.reinitialize()
 
 
 @pytest.fixture(autouse=True)
 def undo_enable(setup):
+    from pymol import cmd
+
     cmd.undo_enable()
-    yield
-    cmd.undo_disable()
+    try:
+        yield
+    finally:
+        cmd.undo_disable()
+
+
+@pytest.fixture
+def output_path(tmp_path):
+    return tmp_path
+
+
+@pytest.fixture
+def data_path():
+    from pathlib import Path
+
+    return Path(__file__).parents[1] / "data"

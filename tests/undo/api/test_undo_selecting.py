@@ -1,5 +1,9 @@
+import pytest
+
 from pymol import cmd
 from pymol.constants import ALL_STATES
+
+pytestmark = pytest.mark.medium
 
 
 def _undo_selection(

@@ -1,4 +1,8 @@
+import pytest
+
 from pymol import cmd
+
+pytestmark = pytest.mark.medium
 
 
 def test_undo_clean():

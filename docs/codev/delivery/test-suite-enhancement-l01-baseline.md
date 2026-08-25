@@ -1,4 +1,4 @@
-# L-01 baseline and candidate proof
+# L-01 baseline report and candidate inventory
 
 **Task:** `test-suite-l01-baseline`
 **Base snapshot:** `1c3f3f309c3f00468cb15e97488bff2c42b97bba`

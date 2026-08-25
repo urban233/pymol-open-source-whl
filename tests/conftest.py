@@ -1,3 +1,5 @@
+"""Shared pytest configuration for the test suite."""
+
 import pytest
 
 
@@ -5,6 +7,11 @@ _SIZE_MARKERS = ("small", "medium", "large")
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Require every test item to declare exactly one size marker.
+
+    Args:
+        items: Collected pytest items to validate.
+    """
     for item in items:
         size_markers = [
             marker

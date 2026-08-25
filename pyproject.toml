@@ -22,7 +22,7 @@ authors = [
   {name = "Martin Urban", email = "martin.urban@studmail.w-hs.de"},
 ]
 dependencies = [
-  "numpy==1.26.4",
+  "numpy>=2.2",
 ]
 
 [dependency-groups]

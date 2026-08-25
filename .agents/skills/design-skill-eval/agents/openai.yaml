@@ -1,0 +1,4 @@
+interface:
+  display_name: "Design Skill Eval"
+  short_description: "Design and scaffold a new fixture for a skill's eval corpus"
+  default_prompt: "Use $design-skill-eval to help me design a new evaluation fixture for an installed skill."

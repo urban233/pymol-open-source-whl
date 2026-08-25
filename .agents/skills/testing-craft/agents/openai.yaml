@@ -1,0 +1,4 @@
+interface:
+  display_name: "Testing Craft"
+  short_description: "Apply Google-derived testing strategy and craft"
+  default_prompt: "Use $testing-craft to design a test strategy, write well-crafted tests, or audit an existing test suite's health."

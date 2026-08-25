@@ -1,0 +1,4 @@
+interface:
+  display_name: "Technical Writing Style"
+  short_description: "Apply Google-derived style to a technical document"
+  default_prompt: "Use $technical-writing-style to audit or revise this document's writing quality without changing its technical meaning."

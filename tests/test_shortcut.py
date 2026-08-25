@@ -3,6 +3,9 @@ import pytest
 from pymol.shortcut import Shortcut
 
 
+pytestmark = pytest.mark.small
+
+
 @pytest.fixture
 def sc() -> Shortcut:
     return Shortcut(["foo", "bar", "baz", "com", "com_bla", "com_xxx"])

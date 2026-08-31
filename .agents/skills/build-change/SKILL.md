@@ -1,6 +1,7 @@
 ---
 name: build-change
-description: Pair with a developer to investigate, plan, implement, test, and prepare one bounded code change, bug fix, refactor, or delivery-plan work item. Use when the user wants hands-on AI-assisted coding with frequent checkpoints and human control rather than a long autonomous implementation loop. Ground every plan in the current repository and keep changes small and reviewable.
+description: Pair with a developer to investigate, plan, implement, test, and prepare one bounded code change, bug fix, refactor, or delivery-plan task. Use when the user wants hands-on AI-assisted coding with frequent checkpoints and human control rather than a long autonomous implementation loop. Ground every plan in the current repository and keep changes small and reviewable.
+license: BSD-3-Clause
 ---
 
 # Build Change
@@ -8,11 +9,18 @@ description: Pair with a developer to investigate, plan, implement, test, and pr
 Work as an interactive pair engineer. The human owns intent and acceptance; the
 AI investigates, proposes, edits, validates, and explains. Use
 `assets/implementation-plan.template.md` only when work spans sessions, affects
-several components, or needs a reviewed written plan.
+several components, or needs a reviewed written plan. When it is written,
+persist it at `docs/codev/task/<task-id>/implementation-plan.md`, keyed
+by the same id passed to `codev task start --id`, unless the project already
+has an established equivalent location. Its Approach and risk points are
+also what an orchestrating session carries into `codev task start
+--description` — the eventual pull request body renders that text verbatim
+and nothing else about the plan, so keep those sections readable on their
+own.
 
 ## 1. Frame the change
 
-Read the issue or work item, relevant brief/design/API references, repository
+Read the issue or task, relevant brief/design/API references, repository
 instructions, and current Git state. Before editing, show a compact inline focus
 card:
 
@@ -53,7 +61,10 @@ exceeds roughly 400 non-generated changed lines or eight files; generated code,
 mechanical migrations, and tightly coupled tests may justify more. Split only
 when each part remains buildable and useful.
 
-Reuse repository patterns. Add or update tests with the behavior. Do not weaken
+Reuse repository patterns. Read
+`.agents/skills/testing-craft/references/writing-tests.md` before adding or
+updating tests -- it covers naming, structure, and the test-doubles
+priority ladder. Add or update tests with the behavior. Do not weaken
 tests, invent missing APIs, silently expand scope, or edit accepted product and
 design decisions to make implementation easier.
 
@@ -82,6 +93,12 @@ Return a compact evidence receipt:
 - **Scope deviations:** none, or accepted deviations;
 - **Known limitations:** risks and follow-up work; and
 - **Review state:** independent review status and rollout implications.
+
+When a written implementation plan exists for this task, update its
+`Status:` line to match this Completion Evidence in the same edit — a plan
+that still says `Draft` while its own Completion Evidence claims delivery is
+a stale artifact, not a harmless formality; independent review checks for
+exactly this mismatch.
 
 For normal or higher-risk work, invoke `review-change` in a fresh context when
 available. The implementing AI never declares its own work approved. The human

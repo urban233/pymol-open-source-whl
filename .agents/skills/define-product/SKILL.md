@@ -1,6 +1,7 @@
 ---
 name: define-product
 description: Turn a software idea, product proposal, or feature request into a clear product or feature brief and select the lightest safe workflow. Use when a developer needs help clarifying users, outcomes, scope, success measures, constraints, assumptions, or whether work is a quick change, feature, or product. Do not design the technical solution or create implementation tasks.
+license: BSD-3-Clause
 ---
 
 # Define Product
@@ -8,7 +9,9 @@ description: Turn a software idea, product proposal, or feature request into a c
 Guide the developer from an idea to an accepted brief. Explain the purpose of
 each step in plain language and keep the conversation focused on product intent.
 
-Use `assets/brief.template.md` when a durable brief is useful.
+Use `assets/brief.template.md` when a durable brief is useful. Read
+`.agents/skills/technical-writing-style/references/writing-style.md`
+completely before drafting or revising the brief's prose.
 
 ## 1. Choose the workflow size
 
@@ -59,9 +62,9 @@ experiment rather than pretending the product is ready for engineering.
 
 ## 4. Save and accept the brief
 
-For a feature, write `docs/features/<slug>/brief.md`. For a product, write
-`docs/product/<slug>/brief.md`. Adapt to an existing repository convention
-instead of creating a parallel structure.
+For a feature, write `docs/codev/features/<slug>/brief.md`. For a product,
+write `docs/codev/product/<slug>/brief.md`. Adapt to an existing repository
+convention instead of creating a parallel structure.
 
 Set `Status: Draft` until the human confirms the outcome, scope, non-goals, and
 success measures. Then set `Status: Accepted`. Git history is the revision

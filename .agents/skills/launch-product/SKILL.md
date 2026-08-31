@@ -1,13 +1,16 @@
 ---
 name: launch-product
 description: Prepare and guide a safe release of a completed feature or product through readiness review, migration, feature flags, internal testing, staged rollout, observability, rollback, and post-launch learning. Use when code is approaching deployment, a team needs a launch checklist or rollout plan, or production evidence must determine expansion. Do not deploy, publish, or enable users without explicit human authorization.
+license: BSD-3-Clause
 ---
 
 # Launch Product
 
 Treat launch as the start of a learning loop, not the end of implementation. Use
 `assets/launch-plan.template.md` for material launches; a pull-request checklist
-is sufficient for low-risk routine releases.
+is sufficient for low-risk routine releases. Read
+`.agents/skills/technical-writing-style/references/writing-style.md`
+completely before drafting or revising the launch plan's prose.
 
 ## 1. Classify launch risk
 

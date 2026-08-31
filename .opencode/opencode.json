@@ -4,43 +4,58 @@
   "agent": {
     "orchestrator": {
       "model": "openai/gpt-5.6-luna",
-      "description": "Human-controlled workflow and work-item orchestrator",
-      "permission": {
-        "bash": {
-          "pymake.bat *": "allow",
-          "pymake.sh *": "allow"
-        }
-      }
+      "description": "Human-controlled workflow and task orchestrator"
     },
-    "builder": {
+    "planner": {
       "model": "openai/gpt-5.6-luna",
-      "description": "Bounded implementation subagent",
-      "permission": {
-        "bash": {
-          "pymake.bat *": "allow",
-          "pymake.sh *": "allow"
-        }
-      }
-    },
-    "reviewer": {
-      "model": "openai/gpt-5.6-luna",
-      "description": "Independent evidence-based code reviewer",
-      "permission": {
-        "bash": {
-          "pymake.bat *": "allow",
-          "pymake.sh *": "allow"
-        }
-      }
+      "description": "Human-controlled entry point for Specify, Understand, Design, and Plan work -- decoupled from execution",
+      "mode": "primary"
     },
     "code-audit": {
       "model": "openai/gpt-5.6-luna",
-      "description": "Standalone primary agent for auditing and fixing code style",
-      "permission": {
-        "bash": {
-          "pymake.bat *": "allow",
-          "pymake.sh *": "allow"
-        }
-      }
+      "description": "Standalone primary code audit agent",
+      "mode": "primary"
+    },
+    "code-audit-gate": {
+      "model": "openai/gpt-5.6-luna",
+      "description": "Autonomous pre-PR cleanup subagent -- fixes style and documentation issues only, dispatched by orchestrator"
+    },
+    "builder": {
+      "model": "openai/gpt-5.6-luna",
+      "description": "Bounded implementation subagent"
+    },
+    "reviewer": {
+      "model": "openai/gpt-5.6-luna",
+      "description": "Independent evidence-based code reviewer"
+    },
+    "lightweight-reviewer": {
+      "model": "openai/gpt-5.6-luna",
+      "description": "Narrow, fast independent check that the inner loop's change matches the task and passes local QA"
+    },
+    "outer-loop-runner": {
+      "model": "openai/gpt-5.6-luna",
+      "description": "Human-triggered outer-loop coordinator -- fetches a PR, gates on CI, dispatches five specialist reviewers, and drives human-triaged correction to a landed pull request",
+      "mode": "primary"
+    },
+    "correctness-tests-specialist": {
+      "model": "openai/gpt-5.6-luna",
+      "description": "Outer-loop specialist for correctness, error handling, and test quality -- one of five parallel specialist reviewers"
+    },
+    "security-data-specialist": {
+      "model": "openai/gpt-5.6-luna",
+      "description": "Outer-loop specialist for security, privacy, data, and compatibility risk -- one of five parallel specialist reviewers"
+    },
+    "concurrency-specialist": {
+      "model": "openai/gpt-5.6-luna",
+      "description": "Outer-loop specialist for concurrency and race-condition risk -- one of five parallel specialist reviewers"
+    },
+    "architecture-maintainability-specialist": {
+      "model": "openai/gpt-5.6-luna",
+      "description": "Outer-loop specialist for architecture, scope, and maintainability -- one of five parallel specialist reviewers"
+    },
+    "rollout-specialist": {
+      "model": "openai/gpt-5.6-luna",
+      "description": "Outer-loop specialist for rollout, monitoring, migration, and rollback -- one of five parallel specialist reviewers"
     }
   }
 }

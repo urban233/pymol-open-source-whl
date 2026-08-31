@@ -1,5 +1,5 @@
 ---
-description: Bounded implementation subagent that executes one accepted work-item plan
+description: Bounded implementation subagent that executes one accepted task plan
 mode: subagent
 permission:
   edit: allow
@@ -13,11 +13,12 @@ permission:
     "git rev-parse*": allow
     "git commit*": deny
     "git push*": deny
+    "codev task *": allow
   external_directory: deny
 ---
 
-Implement exactly one bounded work item delegated by the orchestrator. Follow
-`AGENTS.md`, `docs/for-ai/WORKFLOW-AGENTS.md`, and `build-change`. Treat the
+Implement exactly one bounded task delegated by the orchestrator. Follow
+`AGENTS.md`, `.codev/for-ai/ai-agent-guidelines.md`, and `build-change`. Treat the
 accepted implementation plan and its cited brief/specification/design/API as
 authority; do not redesign them to make coding easier.
 
@@ -43,12 +44,18 @@ information:
 
 - **Delivered:** outcome and behavior;
 - **Changed:** files and components;
-- **Base/head snapshot:** exact values;
+- **Base snapshot:** exact value;
 - **Validation actually run:** commands and outcomes;
 - **Acceptance evidence:** criterion mapped to evidence;
 - **Scope deviations:** none or explicitly accepted deviations;
 - **Known limitations:** risks and follow-up; and
 - **Review state:** `AWAITING INDEPENDENT REVIEW`.
+
+Do not call `codev task record` yourself and do not commit. You have no
+commit permission, so you cannot know the exact head your uncommitted
+changes will land on: the orchestrator commits your diff with `codev git
+commit`, then records this evidence with `codev task record --role builder`
+against that exact resulting head.
 
 Do not invoke another agent, approve the change, commit, push, merge, publish,
 deploy, migrate data, or expand rollout.

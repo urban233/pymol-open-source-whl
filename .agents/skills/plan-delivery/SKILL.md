@@ -1,6 +1,7 @@
 ---
 name: plan-delivery
-description: Turn an accepted product or feature brief and any required design into a lightweight, team-profile-aware multi-developer delivery plan. Use when a team needs outcome-based milestones, unassigned capability lanes or ready work items, owners, independent reviewers, simple dependencies, integration checkpoints, WIP limits, risks, or rolling-wave planning. Do not create a separate architecture or capacity bureaucracy.
+description: Turn an accepted product or feature brief and any required design into a lightweight, team-profile-aware multi-developer delivery plan. Use when a team needs outcome-based milestones, unassigned capability lanes or ready tasks, owners, independent reviewers, simple dependencies, integration checkpoints, WIP limits, risks, or rolling-wave planning. Do not create a separate architecture or capacity bureaucracy.
+license: BSD-3-Clause
 ---
 
 # Plan Delivery
@@ -17,9 +18,11 @@ baseline, even when an external tracker holds routine, high-churn status.
 
 For an explicit request to create or update a delivery plan, create or update
 the plan in the repository. Default to
-`docs/delivery/<milestone-slug>.md`; use an established equivalent location
-when the project already has one. Start from
-`assets/delivery-plan.template.md` when creating a new plan.
+`docs/codev/delivery/<milestone-slug>.md`; use an established equivalent
+location when the project already has one. Start from
+`assets/delivery-plan.template.md` when creating a new plan. Read
+`.agents/skills/technical-writing-style/references/writing-style.md`
+completely before drafting or revising the plan's prose.
 
 An initial request to *show* or frame a milestone without creating a plan may
 remain an unassigned, chat-only planning brief. Make that limitation explicit
@@ -29,13 +32,17 @@ Before writing, verify that every referenced brief and design is a durable
 repository artifact or stable tracker record. Never use a conversation as an
 authority link. If accepted product or architectural decisions exist only in
 conversation, return to `define-product` or `design-solution` to persist the
-appropriate authority before making work items ready.
+appropriate authority before making tasks ready.
 
 Before updating an existing plan, inspect its current content and the Git
 working tree. Do not silently overwrite a locally changed plan; surface the
 conflict and ask for direction. Preserve the plan's document state using only
 `Draft`, `Accepted`, `Active`, or `Superseded`; Git history is its revision
-record.
+record. `Draft` is not a resting state: once every row in "Risks and
+discovery" tied to a Decision point has a recorded human answer, that is the
+point to move the document state to `Accepted` — say so and ask, rather than
+leaving a plan the team is already acting on marked as if it were still
+unresolved.
 
 ## 1. Verify planning inputs
 
@@ -74,7 +81,7 @@ If profiles are incomplete:
 1. recommend the next milestone and show **unassigned capability lanes**, not
    `Developer 1`, `Developer 2`, or similar placeholders;
 2. show only candidate concurrency, conditional on named contracts or fixtures;
-3. do not claim that work items are ready or assign reviewers; and
+3. do not claim that tasks are ready or assign reviewers; and
 4. ask exactly one recommendation-led question for the missing team profile.
 
 When the human explicitly asks for an initial milestone framing first, provide
@@ -96,7 +103,7 @@ in-scope product object when that is necessary to make the demonstration useful.
 Plan the current milestone in detail. Keep later milestones coarse and revise
 them using evidence from working software.
 
-## 3. Create reviewable work items
+## 3. Create reviewable tasks
 
 Before team profiles are available, create only capability lanes. For every lane
 that could proceed concurrently, name the accepted API, schema, decision, or
@@ -104,7 +111,7 @@ contract fixture that makes it safe. If no such authority exists, state
 **Blocked by** the missing contract; do not imply parallelism from technical
 layer names alone.
 
-Each current work item must include:
+Each current task must include:
 
 - outcome and acceptance criteria;
 - relevant design/API links;
@@ -114,7 +121,7 @@ Each current work item must include:
 - expected validation; and
 - status: discovery, ready, in progress, review, blocked, or done.
 
-A work item should normally produce one small pull request or a short stack of
+A task should normally produce one small pull request or a short stack of
 independently valid pull requests. Split by behavior, not by technical layer.
 Use a bounded discovery item when a needed contract cannot be resolved from
 accepted authority. Never turn an unresolved decision into an implementation
@@ -143,7 +150,7 @@ operations approver; never assume an ordinary code reviewer has that authority.
 
 Track changing assignments, availability, and status in the delivery plan or a
 linked project tracker. Do not version them as architecture. When a tracker is
-used, retain the milestone outcome, work-item definitions, ownership/reviewer
+used, retain the milestone outcome, task definitions, ownership/reviewer
 commitments, dependencies, checkpoints, risks, and tracker link in the
 repository plan.
 
@@ -173,6 +180,24 @@ do not duplicate the full document unless the user asks.
 
 ## Handoff
 
-Give each developer only their work item, relevant brief/design/API links,
-integration constraints, and acceptance criteria. Start `build-change` for the
-next ready item.
+Before implementation starts on a ready item, and only when the project
+actually tracks issues on GitHub, push it with `codev git issue-create
+--title <title> --body <body> [--path <glob>]...` (`--path` suggests owners
+from an existing `CODEOWNERS` when one exists) and record the returned issue
+URL back in the plan's own Status/tracker column. This is what
+`codev task start --github-issue N` and `codev git open-pr`'s automatic
+`Closes #N` depend on; a project with no GitHub issue tracker in use skips
+this step and the plan entry alone remains the required authority. Write the
+body to a temp file and pass `--body-file` instead of inline `--body`
+whenever it may contain a backtick, `$`, or double quote — a shell corrupts
+those characters before `codev` ever sees the text, silently mangling the
+issue.
+
+If a developer starts implementation directly, without a session that ran
+this Handoff first, `orchestrator` checks and creates the issue itself
+before opening round state — this Handoff is the first opportunity to do it,
+not the only one.
+
+Give each developer only their task, relevant brief/design/API links,
+integration constraints, and acceptance criteria (including the recorded
+issue URL, when one exists). Start `build-change` for the next ready item.

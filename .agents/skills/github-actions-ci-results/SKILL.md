@@ -1,6 +1,7 @@
 ---
 name: github-actions-ci-results
 description: Read, inspect, and summarize GitHub Actions workflow runs, including run status, jobs, steps, annotations, and relevant logs. Use when a user asks what happened in a GitHub Actions CI run, why CI failed, which job or step failed, whether a run is still in progress, or for a concise CI result suitable for a pull request or incident update.
+license: BSD-3-Clause
 ---
 
 # GitHub Actions CI Results

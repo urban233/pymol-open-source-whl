@@ -4,6 +4,7 @@
 **Owner:** [name or team]
 **Reviewers:** [technical and specialist reviewers]
 **Brief:** [link]
+**Parent design:** [link -- only if this is a child split from a larger design]
 **Last reviewed:** [YYYY-MM-DD]
 
 ## Summary

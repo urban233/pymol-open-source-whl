@@ -40,6 +40,17 @@ dev = [
 Documentation = "https://pymolwiki.org/index.php/Main_Page"
 Repository = "https://github.com/urban233/pymol-open-source-whl"
 
+[tool.pytest.ini_options]
+strict_markers = true
+markers = [
+  "small: pure-Python, narrow-scope test",
+  "medium: in-process PyMOL API test",
+  "large: installed-wheel, platform, subprocess, GUI, or service test",
+  "network: accesses a remote service",
+  "gui: requires a graphical environment",
+  "optional_dependency: requires an optional package",
+]
+
 [tool.scikit-build]
 build.verbose = true
 logging.level = "DEBUG"

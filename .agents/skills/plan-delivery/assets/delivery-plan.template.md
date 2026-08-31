@@ -20,7 +20,7 @@
 
 ## Current work
 
-| ID | Work item and acceptance | Owner | Reviewer | Risk | Status | Blocked by | Integrates with / lands after | Validation |
+| ID | Task and acceptance | Owner | Reviewer | Risk | Status | Blocked by | Integrates with / lands after | Validation |
 |---|---|---|---|---|---|---|---|---|
 | W-01 | [bounded outcome] | [owner] | [reviewer] | [level] | Ready | — | [relation] | [checks] |
 

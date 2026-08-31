@@ -2,6 +2,8 @@ import pytest
 
 from pymol import cmd
 
+pytestmark = pytest.mark.medium
+
 
 def test_undo_protect():
     cmd.pseudoatom("m1", pos=[0.0, 0.0, 0.0])

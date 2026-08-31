@@ -3,6 +3,8 @@ import pytest
 from chempy import cpv
 from pymol import cmd
 
+pytestmark = pytest.mark.medium
+
 
 def test_undo_clean():
     cmd.fragment("his")

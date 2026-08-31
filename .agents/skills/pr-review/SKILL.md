@@ -1,6 +1,7 @@
 ---
 name: pr-review
 description: Review an existing GitHub Pull Request as an exact merge candidate and prepare evidence-based inline review comments for GitHub. Use only when a developer asks to review a GitHub PR before merge, inspect its PR description and checks, or publish a pending PR review; do not use for general code review, commit review, branch review, or working-tree review.
+license: BSD-3-Clause
 ---
 
 # GitHub Pull Request Review
@@ -12,7 +13,7 @@ this into a general branch, commit, or working-tree review.
 ## Review contract
 
 1. Identify the repository, PR number, base SHA, head SHA, merge base, title,
-   description, draft state, linked work item, changed files, CI/check status,
+   description, draft state, linked task, changed files, CI/check status,
    existing review comments, and current checkout state.
 2. Stop if the PR cannot be resolved, the head changed during inspection, the
    required brief or acceptance evidence is missing, or local changes would be
@@ -64,21 +65,54 @@ Produce both:
    comment contains `finding_id`, `body`, `path`, and either a valid inline
    location or `subject_type: "file"`.
 
-Use `scripts/publish_review.py` to fetch PR context, validate the payload, and create a GitHub
-review. It is dry-run by default. Authentication uses the authenticated `gh`
-CLI automatically when no `GITHUB_TOKEN` or `GH_TOKEN` is present; use
-`--auth gh` or `--auth token` to select a backend explicitly. Run it with
-`--publish` only after the developer explicitly authorizes posting. A published
-review is pending unless an explicit `--submit comment` or
-`--submit request-changes` is supplied. Never submit `APPROVE` on behalf of a
-human.
+Make `summary` a brief index of the findings, not a duplicate of the inline
+comment prose. GitHub displays the submitted review body separately from its
+inline comments. For example, use `One inline P2 finding:
+PR2-BRADFORD-FLAT-RESPONSE.` as the summary, and keep the evidence, impact,
+and correction in that finding's inline body.
+
+## Publication workflow
+
+Use `scripts/publish_review.py` to fetch PR context, validate the payload, and
+create a GitHub review. It is dry-run by default. Authentication uses the
+authenticated `gh` CLI automatically when no `GITHUB_TOKEN` or `GH_TOKEN` is
+present; use `--auth gh` or `--auth token` to select a backend explicitly. Run
+it with `--publish` only after the developer explicitly authorizes posting.
+Never submit `APPROVE` on behalf of a human.
+
+For a new review that the developer has authorized to be visible immediately,
+create and submit it in one operation:
+
+```text
+python .agents/skills/pr-review/scripts/publish_review.py \
+  --repo OWNER/REPO --pr 123 --review .codev/pr-review/123/review.json \
+  --auth gh --publish --submit comment
+```
+
+Use `--submit request-changes` only when the developer has explicitly
+authorized that formal review event. Without `--submit`, `--publish` creates a
+pending review. A pending review is a draft lifecycle state, not a second
+standalone PR comment; GitHub can show both the original “started a review”
+timeline event and the later submitted review.
+
+The current publisher creates reviews; it does not submit an existing pending
+review by ID. Therefore, never retry a pending-review submission by rerunning
+`--review ... --publish --submit ...`: that is a new create operation and can
+produce a second review. Submit the original pending review through GitHub's
+review UI, or first extend the publisher with an explicit, validated
+submit-existing-review operation. Before any retry, fetch `reviews` and
+`comments` and confirm the current head SHA, review state, review ID, and
+finding markers. Treat an existing matching review as a successful no-op,
+rather than posting another payload.
 
 The publisher must use authenticated `gh api` or `GITHUB_TOKEN`/`GH_TOKEN`, must
 verify the current head SHA, must reject stale or invalid anchors, and must
-avoid duplicate comments using the stable finding IDs. Do not print or extract
-the `gh` credential. If the agent does not inherit the Windows machine PATH,
-use the standard install location or set `CODEV_GH_PATH`. Do not hardcode a
-provider, model, token, or endpoint outside GitHub.
+avoid duplicate comments using the stable finding IDs. Review payloads should
+also use a stable, review-level identity when the publisher supports it, so a
+complete retry can detect an already-created review before creating another.
+Do not print or extract the `gh` credential. If the agent does not inherit the
+Windows machine PATH, use the standard install location or set `CODEV_GH_PATH`.
+Do not hardcode a provider, model, token, or endpoint outside GitHub.
 
 ## Fetch PR context
 

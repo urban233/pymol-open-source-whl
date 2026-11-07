@@ -98,6 +98,14 @@ jobs:
         with:
           name: PyMOL-wheel-Windows-${{ matrix.win_arch }}
           path: ./wheelhouse/*.whl
+
+      - name: Upload wheel test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-tests-Windows-${{ matrix.win_arch }}
+          path: ./build/wheel-test-results/*.xml
+          if-no-files-found: warn
   # --- end
 
   # ----- macOS build section
@@ -167,12 +175,23 @@ jobs:
         with:
           name: PyMOL-wheel-${{ matrix.os }}
           path: ./wheelhouse/*.whl
+
+      - name: Upload wheel test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-tests-${{ matrix.os }}
+          path: ./build/wheel-test-results/*.xml
+          if-no-files-found: warn
   # --- end
 
   # ----- GNU Linux build section
   build-gnu-linux:
     name: GNU/Linux (x64)
     runs-on: ubuntu-22.04
+    env:
+      # cibuildwheel copies /project; /host preserves reports on the runner.
+      PYMOL_WHEEL_TEST_REPORTS: /host${{ github.workspace }}/build/wheel-test-results
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -234,6 +253,14 @@ jobs:
         with:
           name: PyMOL-wheel-GNU-Linux
           path: ./wheelhouse/*.whl
+
+      - name: Upload wheel test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-tests-GNU-Linux
+          path: ./build/wheel-test-results/*.xml
+          if-no-files-found: warn
   # --- end
 
   release-integrity:

@@ -144,7 +144,7 @@ if (${PLATFORM} STREQUAL "GNU_LINUX")
     )
 endif ()
 # --- end
-find_package(Python COMPONENTS Interpreter Development.Module REQUIRED)
+find_package(Python COMPONENTS Interpreter Development.Module NumPy REQUIRED)
 
 set(ALL_SRC
         build/generated/ShaderText.cpp
@@ -422,6 +422,7 @@ set (ALL_INCLUDE_DIR
         layerGraphics
         layerGraphics/gl
         build/generated
+        ${Python_NumPy_INCLUDE_DIRS}
         pre-built/include
         ${OS_SPECIFIC_INCLUDES}
         ${Python3_INCLUDE_DIRS}

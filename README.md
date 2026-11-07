@@ -89,7 +89,18 @@ For a platform-specific native wheel build, use cibuildwheel through PyMake:
 ```
 
 Each cibuildwheel build installs the resulting wheel in an isolated environment
-and runs the configured PyMOL test suite before producing the artifact.
+and runs the offline PyMOL test suite against both the minimum compatible NumPy 2
+and the latest NumPy 2 before producing the artifact. Mandatory coordinate and
+volume array tests must pass; missing or skipped native NumPy tests fail the
+build. The minimum is NumPy 2.2.0 for Python 3.10-3.13 and NumPy 2.3.3 for Python
+3.14. CI retains separate JUnit reports for each wheel and NumPy version, including
+failed runs. Release validation still requires all twenty Python/platform wheels
+before publication.
+
+Wheels are compiled using NumPy 2 headers from the Python build environment.
+This release requires NumPy 2 at runtime; there is no separate NumPy 1 variant.
+These checks cover headless package and NumPy interoperability, not GUI behavior
+or every operating system version.
 
 To run the packaged test suite locally, use:
 

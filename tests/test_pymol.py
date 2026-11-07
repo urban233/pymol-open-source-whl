@@ -13,27 +13,23 @@
 #-*
 #Z* -------------------------------------------------------------------
 """
-import pathlib
 
-import pymol
-from pymol import cmd
+from pathlib import Path
 
-_FILEPATH = pathlib.Path(__file__).parent
+from pymol2 import PyMOL
 
 
-# Use this only for internal testing!
-# def test_startup():
-#   """Tests if PyMOL can be launched.
-#
-#   Note:
-#     Do NOT use this in any CI/CD workflow
-#   """
-#   pymol.launch()
+def test_local_import_export(tmp_path: Path) -> None:
+    """Exercise installed-wheel import/export without a remote server."""
+    with PyMOL() as session:
+        cmd = session.cmd
+        cmd.pseudoatom("original", name="CA", elem="C", pos=[1.0, 2.0, 3.0])
+        structure = tmp_path / "structure.pdb"
+        cmd.save(str(structure), "original")
+        assert structure.is_file()
 
-
-def test_fetch() -> None:
-  """Tests if the fetch command works correctly."""
-  cmd.fetch("3bmp")
-  cmd.save(str(pathlib.Path(_FILEPATH / "3bmp.cif")), "3bmp")
-  assert pathlib.Path(_FILEPATH / "3bmp.cif").exists() is True
-  assert cmd.get_model("3bmp").atom[0].model == "3bmp"
+        cmd.delete("original")
+        cmd.load(str(structure), "restored")
+        assert cmd.count_atoms("restored") == 1
+        assert cmd.get_model("restored").atom[0].name == "CA"
+        assert cmd.get_atom_coords("restored") == [1.0, 2.0, 3.0]
